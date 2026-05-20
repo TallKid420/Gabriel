@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+import uuid
+
+import yaml
+
+
+@dataclass
+class AgentConfig:
+    name: str
+    type: str
+    provider: str
+    endpoint: str
+    timeout_seconds: int
+    temperature: float
+    model: str
+    system_prompt: str
+    tools: list[str] = field(default_factory=list)
+    schedule: str | None = None
+    trigger: str | None = None
+    enabled: bool = True
+    agent_id: str | None = None
+    mailbox_id: str | None = None
+    parent_id: str | None = None
+    spawn_depth: int = 0
+    max_children: int = 5
+    max_spawn_depth: int = 3
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+def load(path: str | Path) -> dict[str, Any]:
+    config_path = Path(path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    with config_path.open("r", encoding="utf-8") as file:
+        loaded = yaml.safe_load(file)
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _agent_from_dict(entry: dict[str, Any]) -> AgentConfig:
+    known = {
+        "name",
+        "type",
+        "provider",
+        "endpoint",
+        "timeout_seconds",
+        "temperature",
+        "model",
+        "system_prompt",
+        "tools",
+        "schedule",
+        "trigger",
+        "enabled",
+        "agent_id",
+        "mailbox_id",
+    }
+    extra = {k: v for k, v in entry.items() if k not in known}
+
+    if not entry.get("name"):
+        raise ValueError("Agent config missing name")
+    if not entry.get("type"):
+        raise ValueError("Agent config missing type")
+    if not entry.get("provider"):
+        raise ValueError("Agent config missing provider")
+    if not entry.get("model"):
+        raise ValueError("Agent config missing model")
+    if int(entry.get("timeout_seconds", 60)) <= 0:
+        raise ValueError("timeout_seconds must be > 0")
+
+    agent_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(entry["name"])))
+
+    return AgentConfig(
+        name=str(entry["name"]),
+        type=str(entry["type"]),
+        provider=str(entry["provider"]),
+        endpoint=str(entry.get("endpoint", "http://localhost:11434")),
+        temperature=float(entry.get("temperature", 0.0)),
+        timeout_seconds=int(entry.get("timeout_seconds", 60)),
+        model=str(entry["model"]),
+        system_prompt=str(entry.get("system_prompt", "")),
+        tools=list(entry.get("tools", [])),
+        schedule=entry.get("schedule"),
+        trigger=entry.get("trigger"),
+        enabled=bool(entry.get("enabled", True)),
+        agent_id=agent_id,
+        mailbox_id=agent_id,
+        extra=extra,
+    )
+
+
+def _extract_entries(raw: dict[str, Any], section_name: str) -> list[dict[str, Any]]:
+    section = raw.get(section_name, {})
+    if isinstance(section, list):
+        return [entry for entry in section if isinstance(entry, dict)]
+    if isinstance(section, dict):
+        agents_list = section.get("agents")
+        if isinstance(agents_list, list):
+            return [entry for entry in agents_list if isinstance(entry, dict)]
+        return [
+            {"name": key, **value}
+            for key, value in section.items()
+            if key != "agents" and isinstance(value, dict)
+        ]
+    return []
+
+
+def load_agents(path: str | Path) -> list[AgentConfig]:
+    return load_custom_agents(path)
+
+
+def load_system_agents(path: str | Path) -> list[AgentConfig]:
+    raw = load(path)
+    entries = _extract_entries(raw, "system_agents")
+    return [_agent_from_dict(entry) for entry in entries if entry.get("enabled", True)]
+
+
+def load_custom_agents(path: str | Path) -> list[AgentConfig]:
+    raw = load(path)
+    entries = _extract_entries(raw, "custom_agents")
+    return [_agent_from_dict(entry) for entry in entries if entry.get("enabled", True)]
