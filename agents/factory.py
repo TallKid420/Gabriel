@@ -1,11 +1,13 @@
+"""
+hermes/agents/factory.py
+"""
 from __future__ import annotations
-
-import logging
-
 from agents.base_agent import BaseAgent
 from agents.registry import AGENT_REGISTRY
 from config.config_loader import AgentConfig
 
+import logging
+import uuid
 
 log = logging.getLogger(__name__)
 
@@ -35,18 +37,19 @@ class AgentFactory:
 
     @classmethod
     def spawn(cls, config: AgentConfig) -> BaseAgent:
-        key = config.agent_id or config.name
-        cached = cls._CACHE.get(key)
-        if cached:
-            return cached
+        if not config.agent_id:
+            config.agent_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, config.name))
+        elif config.agent_id in cls._CACHE:
+            return cls._CACHE[config.agent_id]
+        
+        agent_class = AGENT_REGISTRY.get(str(config.type).strip().lower())
 
-        agent_type = str(config.type).strip().lower()
-        agent_class = AGENT_REGISTRY.get(agent_type)
         if not agent_class:
             raise ValueError(
                 f"Unknown agent type: '{config.type}'. "
                 f"Registered types: {list(AGENT_REGISTRY.keys())}"
             )
+
 
         base_agent = cls._to_base_agent(config)
         if isinstance(base_agent, agent_class):
@@ -54,7 +57,7 @@ class AgentFactory:
         else:
             agent = agent_class(**base_agent.to_dict(), extra=base_agent.extra)
         agent.validate()
-        cls._CACHE[key] = agent
+        cls._CACHE[config.agent_id] = agent
         return agent
 
     @classmethod

@@ -90,3 +90,18 @@ class AgentExecutor:
         runtime_agent = AgentFactory.spawn(self._to_agent_config(agent))
         output = runtime_agent.run(self._extract_latest_user_input(messages))
         return self._result(runtime_agent.name, output)
+
+    def execute_stream(self, agent: BaseAgent, messages: list[dict[str, str]]):
+        if not agent.enabled:
+            yield f"Agent '{agent.name}' is disabled"
+            return
+        self._validate_type_contract(agent)
+        agent.validate()
+        runtime_agent = AgentFactory.spawn(self._to_agent_config(agent))
+        user_input = self._extract_latest_user_input(messages)
+        stream_fn = getattr(runtime_agent, "run_stream", None)
+        if callable(stream_fn):
+            for chunk in stream_fn(user_input):
+                yield str(chunk)
+            return
+        yield runtime_agent.run(user_input)

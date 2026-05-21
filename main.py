@@ -119,7 +119,7 @@ def sidebar_ui() -> None:
     c1.metric("Sessions", total_sessions)
     c2.metric("Messages", total_messages)
 
-    tab_chat, tab_assistant, tab_system = st.sidebar.tabs(["Chat", "Assistant", "System"])
+    tab_chat, tab_system = st.sidebar.tabs(["Chat", "System"])
 
     with tab_chat:
         st.button("New session", on_click=create_session, use_container_width=True)
@@ -140,58 +140,6 @@ def sidebar_ui() -> None:
             if right.button("✕", key=f"session_delete_{session_id}", use_container_width=True):
                 delete_session(session_id)
                 st.rerun()
-
-##########################
-    # with tab_assistant:
-    #     model_options = st.session_state.backend.list_models()
-    #     available_models = model_options if model_options else [""]
-    #     if st.session_state.model in available_models:
-    #         selected_index = available_models.index(st.session_state.model)
-    #     else:
-    #         selected_index = 0
-    #     selected_model = st.selectbox(
-    #         "Model",
-    #         options=available_models,
-    #         index=selected_index,
-    #     )
-    #     manual_model = st.text_input("Model override", value=st.session_state.model or selected_model)
-    #     st.session_state.model = manual_model.strip() or selected_model
-
-    #     st.subheader("Skills")
-    #     for key, value in st.session_state.skills.items():
-    #         st.session_state.skills[key] = st.toggle(key.replace("_", " ").title(), value=value)
-
-    #     st.subheader("Generation")
-    #     st.session_state.settings["temperature"] = st.slider(
-    #         "Temperature",
-    #         min_value=0.0,
-    #         max_value=2.0,
-    #         value=float(st.session_state.settings["temperature"]),
-    #         step=0.05,
-    #     )
-    #     st.session_state.settings["top_p"] = st.slider(
-    #         "Top P",
-    #         min_value=0.0,
-    #         max_value=1.0,
-    #         value=float(st.session_state.settings["top_p"]),
-    #         step=0.01,
-    #     )
-    #     st.session_state.settings["max_tokens"] = st.number_input(
-    #         "Max tokens",
-    #         min_value=32,
-    #         max_value=32768,
-    #         value=int(st.session_state.settings["max_tokens"]),
-    #         step=32,
-    #     )
-    #     st.session_state.settings["system_prompt"] = st.text_area(
-    #         "System prompt",
-    #         value=st.session_state.settings["system_prompt"],
-    #         height=120,
-    #     )
-    #     if st.button("Reset assistant defaults", use_container_width=True):
-    #         st.session_state.skills = dict(DEFAULT_SKILLS)
-    #         st.session_state.settings = dict(DEFAULT_SETTINGS)
-    #         st.rerun()
 
     with tab_system:
         daemon_status = st.session_state.daemon.status()
@@ -260,14 +208,13 @@ def chat_ui() -> None:
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            result = st.session_state.agent_executor.execute(
+            stream = st.session_state.agent_executor.execute_stream(
                 agent=selected_agent,
                 messages=session.messages,
             )
-            reply = result.output
-        st.markdown(format_response(reply))
+            reply = st.write_stream(stream)
 
-    session.messages.append({"role": "assistant", "content": reply})
+    session.messages.append({"role": "assistant", "content": str(reply)})
 
 
 def main() -> None:

@@ -104,3 +104,6 @@ class BaseAgent:
 
     def get_tools(self) -> List[Any]:
         return []
+
+    def run_stream(self, user_input: str):
+        yield str(getattr(self, "run")(user_input))
