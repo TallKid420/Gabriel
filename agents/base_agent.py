@@ -1,5 +1,6 @@
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 
 AGENT_TYPE_MAP: dict[str, str] = {
@@ -29,6 +30,7 @@ class BaseAgent:
     tools: List[str] = field(default_factory=list)
     system_prompt: Optional[str] = None
 
+    agent_id: UUID | str = None
     # Extra metadata storage
     extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -48,6 +50,7 @@ class BaseAgent:
             "context_window",
             "tools",
             "system_prompt",
+            "agent_id",
         }
 
         extracted = {k: v for k, v in data.items() if k in known_fields}

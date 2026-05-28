@@ -59,7 +59,7 @@ class AgentExecutor:
             name=agent.name,
             type=agent.type,
             provider=agent.provider,
-            endpoint=agent.endpoint or "http://localhost:11434",
+            endpoint=agent.endpoint,
             timeout_seconds=agent.timeout_seconds,
             temperature=float(agent.temperature),
             model=agent.model,
@@ -99,9 +99,10 @@ class AgentExecutor:
         agent.validate()
         runtime_agent = AgentFactory.spawn(self._to_agent_config(agent))
         user_input = self._extract_latest_user_input(messages)
+
         stream_fn = getattr(runtime_agent, "run_stream", None)
+        
         if callable(stream_fn):
             for chunk in stream_fn(user_input):
-                yield str(chunk)
+                yield chunk
             return
-        yield runtime_agent.run(user_input)

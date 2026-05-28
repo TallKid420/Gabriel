@@ -27,6 +27,7 @@ custom_agents:
     endpoint: http://jcs-macbook-pro:11434
     timeout_seconds: 20
     temperature: 0
+    max_tokens: 10000
     model: gpt-oss:120b
     system_prompt: You are Hermes...
     enabled: true
@@ -34,7 +35,7 @@ custom_agents:
     type: researcher
     endpoint: http://jcs-macbook-pro:11434
     provider: ollama
-    model: gpt-oss:20b
+    model: gpt-oss:120b
     tools:
     - Web Search
     - file_write
@@ -43,9 +44,9 @@ custom_agents:
   - name: engineer-1
     type: engineer
     provider: ollama
-    model: hermes3
-    tools:
-    - code_exec
-    - git_read
+    endpoint: http://jcs-macbook-pro:11434
     timeout_seconds: 20
-    enabled: true
+    temperature: 0
+    max_tokens: 10000
+    model: gpt-oss:120b
+    system_prompt: You are Hermes...

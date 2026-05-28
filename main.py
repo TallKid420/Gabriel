@@ -33,11 +33,63 @@ def format_response(content: str) -> str:
         try:
             parsed = json.loads(text)
             pretty = json.dumps(parsed, indent=2, ensure_ascii=False)
-            return f"```json\n{pretty}\n```"
+            return f"json\n{pretty}\n"
         except Exception:
             return text
     return text
 
+
+def render_streamed_reply(stream) -> str:
+
+    tools_container = st.container()
+    text_container = st.empty()
+    
+    rendered_text = ""
+
+    tool_expanders = {}
+
+    for chunk in stream:
+
+        print(f"Received chunk: {chunk}")
+
+        match chunk["type"]:
+            case "text":
+                rendered_text += chunk["content"]
+                text_container.markdown(rendered_text)
+
+            case "tool_start":
+                tool_name = chunk["name"]
+
+                with tools_container:
+                    expander = st.expander(
+                        f"Tool: {tool_name}",
+                        expanded=True,
+                    )
+
+                    expander.write(
+                        f"**Input:**\n```json\n{chunk['input']}\n```"
+                    )
+
+                    tool_expanders[tool_name] = expander
+
+            case "tool_end":
+                tool_name = chunk["name"]
+
+                expander = tool_expanders.get(tool_name)
+
+                if expander:
+
+                    output = getattr(
+                        chunk["output"],
+                        "content",
+                        str(chunk["output"])
+                    )
+
+                    expander.write(
+                        f"**Output:**\n```text\n{output}\n```"
+                    )
+
+    return rendered_text
 
 def ensure_state() -> None:
     if "config_manager" not in st.session_state:
@@ -212,9 +264,9 @@ def chat_ui() -> None:
                 agent=selected_agent,
                 messages=session.messages,
             )
-            reply = st.write_stream(stream)
+            reply = render_streamed_reply(stream)
 
-    session.messages.append({"role": "assistant", "content": str(reply)})
+    session.messages.append({"role": "assistant", "content": reply})
 
 
 def main() -> None:

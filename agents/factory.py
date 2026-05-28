@@ -31,6 +31,7 @@ class AgentFactory:
             "context_window": config.extra.get("context_window"),
             "tools": config.tools,
             "system_prompt": config.system_prompt,
+            "agent_id": config.agent_id,
             **config.extra,
         }
         return BaseAgent.from_dict(data)
