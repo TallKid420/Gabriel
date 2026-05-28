@@ -48,12 +48,12 @@ class DaemonAgent(BaseAgent):
             checkpointer=InMemorySaver(),
         )
 
-    def run(self, user_input: str) -> str:
-        llm = self._build_runtime()
-        return llm.invoke(
-            user_input,
-            config={"configurable": {"thread_id": "1"}},
-        )["messages"][-1].content
+    def run(self, user_input: str, thread_id: str) -> str:
+        response = self.agent.invoke(
+            {"messages": [{"role": "user", "content": user_input}]},
+            config={"configurable": {"thread_id": thread_id}},
+        )
+        return response["messages"][-1].content
 
     def run_stream(self, user_input: str):
 

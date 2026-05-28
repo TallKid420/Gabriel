@@ -65,16 +65,12 @@ class EngineerAgent(BaseAgent):
             # checkpointer=self.memory,
         )
     
-    def run(self, user_input: str) -> str:
+    def run(self, user_input: str, thread_id: str) -> str:
         response = self.agent.invoke(
-            {"messages": [{"role": "user", "content": user_input}]}
+            {"messages": [{"role": "user", "content": user_input}]},
+            config={"configurable": {"thread_id": thread_id}},
         )
-
-        messages = response.get("model", {}).get("messages", [])
-        if not messages:
-            return ""
-
-        return messages[-1].content
+        return response["messages"][-1].content
        
     def run_stream(self, user_input: str):
 
