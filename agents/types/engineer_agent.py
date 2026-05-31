@@ -1,16 +1,15 @@
 from langchain_core.tools import BaseTool
 from langchain_ollama import ChatOllama
-from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain.agents import create_agent
 from langchain_core._api.beta_decorator import LangChainBetaWarning
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from agents.base_agent import BaseAgent
 from executor.toolhandler import build_tool_list
-
-from pathlib import Path
+from daemon.database import Database
 
 import warnings
-import sqlite3
+import asyncio
 
 TOOLS: list[BaseTool] = build_tool_list("system")
 class EngineerAgent(BaseAgent):
@@ -42,27 +41,13 @@ class EngineerAgent(BaseAgent):
             max_tokens=int(self.max_tokens or 1024),
         )
 
-        # Setup Database path and Checkpointer File
-        DB_PATH = Path(f"database/checkpoint/{self.name}-{self.type}/checkpoints.sqlite")
-
-        # create parent folders automatically
-        DB_PATH.parent.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-        conn = sqlite3.connect(
-            DB_PATH,
-            check_same_thread=False
-        )
-
-        self.memory = SqliteSaver(conn)
+        memory = Database().connect_sync()
 
         return create_agent(
             model=self.llm,
             tools=self.get_tools(),
             system_prompt=self.system_prompt,
-            # checkpointer=self.memory,
+            checkpointer=SqliteSaver(memory),
         )
     
     def run(self, user_input: str, thread_id: str) -> str:
@@ -71,11 +56,12 @@ class EngineerAgent(BaseAgent):
             config={"configurable": {"thread_id": thread_id}},
         )
         return response["messages"][-1].content
-       
-    def run_stream(self, user_input: str):
+
+    def run_stream(self, user_input: str, thread_id: str):
 
         stream = self.agent.stream_events(
             {"messages": [{"role": "user", "content": user_input}]},
+            config={"configurable": {"thread_id": thread_id}},
             version="v3",
         )
 

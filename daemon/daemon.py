@@ -4,12 +4,16 @@ import signal
 import threading
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from agents.types.daemon_agent import DaemonAgent
 from agents.executor import AgentExecutor, AgentExecutionResult
 from config.config_manager import ConfigManager
+
+from psycopg_pool import AsyncConnectionPool
+from psycopg.rows import dict_row
+
+import asyncio
 
 
 @dataclass
@@ -19,6 +23,28 @@ class DaemonConfig:
     shutdown_timeout_sec: float = 5.0
     config_path: str = "config/agents.yaml"
     metadata: dict[str, Any] = field(default_factory=dict)
+
+class Database:
+    async def connect(
+            self, 
+            user: str = "user",
+            password: str = "password",
+            host: str = "localhost",
+            port: int = 5432,
+            database: str = "mydatabase",
+            sslmode: str = "prefer",
+        ) -> None:
+        async with AsyncConnectionPool(
+            conninfo=f"postgresql://{user}:{password}@{host}:{port}/{database}?sslmode={sslmode}",
+            max_size=20,
+            kwargs={
+                "autocommit": True,
+                "prepare_threshold": 0,
+                "row_factory": dict_row,
+            },
+        ) as pool, pool.connection() as conn:
+            # Init chat memory
+            return conn
 
 class ServerDaemon:
     def __init__(self, config: DaemonConfig | None = None) -> None:
