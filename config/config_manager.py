@@ -138,6 +138,28 @@ class ConfigManager:
 
         return False
 
+    def update_agent(self, current_name: str, agent_data: Dict[str, Any]) -> bool:
+        """Update an existing agent with new data."""
+        agent = self.get_agent(current_name)
+        
+        if not agent:
+            return False
+        
+        # Check if new name conflicts with another agent
+        new_name = agent_data.get("name")
+        if new_name and new_name != current_name and self.get_agent(new_name):
+            raise ValueError(f"Agent '{new_name}' already exists")
+        
+        # Update agent fields
+        for key, value in agent_data.items():
+            if key in ["name", "endpoint", "model", "system_prompt", "timeout_seconds", "temperature", "max_tokens"]:
+                if value is not None:
+                    setattr(agent, key, value)
+        
+        agent.validate()
+        self.save()
+        return True
+
     def enable_agent(self, name: str) -> bool:
         agent = self.get_agent(name)
 

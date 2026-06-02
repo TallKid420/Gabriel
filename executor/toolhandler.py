@@ -3,6 +3,7 @@ import importlib.util
 import logging
 import re
 from pathlib import Path
+from typing import List
 
 from langchain_core.callbacks import BaseCallbackHandler
 
@@ -32,32 +33,34 @@ def _is_tool_decorated(node: ast.FunctionDef) -> bool:
     return False
 
 
-def _load_tools_from_folder(folder_name: str) -> list:
-    normalized = (folder_name or "").strip().lower()
-    if not normalized or not re.fullmatch(r"[a-z0-9_-]+", normalized):
-        return []
-
+def build_tool_list(folders: List[str]) -> list:
     root = Path(__file__).resolve().parent / "tools"
-    target = root / normalized
-    if not target.exists() or not target.is_dir():
-        return []
-
     loaded = []
-    for script_path in sorted(target.glob("*.py")):
-        if script_path.name == "__init__.py":
-            continue
-        module_name = f"executor.tools.{normalized}.{script_path.stem}"
-        try:
-            spec = importlib.util.spec_from_file_location(module_name, script_path)
-            if spec is None or spec.loader is None:
+
+    for folder_name in folders:
+        normalized = (folder_name or "").strip().lower()
+        if not normalized or not re.fullmatch(r"[a-z0-9_-]+", normalized):
+            return []
+
+        target = root / normalized
+        if not target.exists() or not target.is_dir():
+            return []
+
+        for script_path in sorted(target.glob("*.py")):
+            if script_path.name == "__init__.py":
                 continue
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            for value in vars(module).values():
-                if hasattr(value, "name") and hasattr(value, "invoke"):
-                    loaded.append(value)
-        except Exception:
-            continue
+            module_name = f"executor.tools.{normalized}.{script_path.stem}"
+            try:
+                spec = importlib.util.spec_from_file_location(module_name, script_path)
+                if spec is None or spec.loader is None:
+                    continue
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                for value in vars(module).values():
+                    if hasattr(value, "name") and hasattr(value, "invoke"):
+                        loaded.append(value)
+            except Exception:
+                continue
     return loaded
 
 
@@ -103,7 +106,3 @@ def discover_tools_by_folder(folder_name: str) -> dict:
         "tools": flat,
         "scripts": discovered,
     }
-
-
-def build_tool_list(folder_name: str) -> list:
-    return _load_tools_from_folder(folder_name)

@@ -9,9 +9,8 @@ from executor.toolhandler import build_tool_list
 from daemon.database import Database
 
 import warnings
-import asyncio
 
-TOOLS: list[BaseTool] = build_tool_list("system")
+TOOLS: list[BaseTool] = build_tool_list(["system"])
 class EngineerAgent(BaseAgent):
 
     def validate(self) -> None:

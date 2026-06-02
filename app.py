@@ -101,7 +101,12 @@ def main() -> None:
     pg = st.navigation([
         st.Page("views/chat.py", title="Chat", icon="💬"),
         st.Page("views/server.py", title="Server", icon="🖥️"),
+        st.Page("views/models.py", title="Models", icon="🤖"),
         st.Page("views/sessions.py", title="Sessions", icon="📋"),
+        st.Page("views/agents.py", title="Agents", icon="🧠"),
+        st.Page("views/memory.py", title="Memory", icon="💾"),
+        st.Page("views/tools.py", title="Tools", icon="🧰"),
+        st.Page("views/settings.py", title="Settings", icon="⚙️"),
     ])
     pg.run()         # ← Executes the selected page
 
