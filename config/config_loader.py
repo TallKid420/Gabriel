@@ -31,6 +31,47 @@ class AgentConfig:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class CrawlerConfig:
+    # ── Paths ─────────────────────────────────────────────────────────────────
+    db_path:    Path = Path("data/links.sqlite")
+    raw_dir:    Path = Path("data/raw")
+    files_dir:  Path = Path("data/files")
+
+    # ── Ollama / vector DB ────────────────────────────────────────────────────
+    ollama_base_url:   str = ""
+    embedding_model:   str = "bge-m3"
+    llm_model:         str = "mistral:v0.3"
+    chroma_db_path:    Path = Path("data/chroma")
+
+    # ── Crawl loop ────────────────────────────────────────────────────────────
+    crawl_interval_sec:          float = 60.0
+    crawl_batch_size:            int   = 10
+    browser_instances:           int   = 1
+    max_concurrent_per_instance: int   = 3
+    request_timeout_seconds:     int   = 60
+
+    # ── Ingest loop ───────────────────────────────────────────────────────────
+    ingest_interval_sec: float = 15.0
+    ingest_batch_size:   int   = 10
+
+    # ── File handling ─────────────────────────────────────────────────────────
+    allowed_extensions: list[str] = field(default_factory=lambda: [
+        ".pdf", ".txt", ".md", ".html", ".htm",
+        ".csv", ".json", ".xml", ".docx", ".xlsx",
+    ])
+
+    # ── Backpressure (optional) ───────────────────────────────────────────────
+    # If set, crawling pauses when this many raw files are waiting for ingest.
+    # Remove or set to null in YAML to disable.
+    backpressure_threshold: int | None = None
+
+    # ── Daemon lifecycle ──────────────────────────────────────────────────────
+    # If true, the daemon keeps running after the UI process exits.
+    # If false, the daemon stops when the UI stops.
+    keep_alive_on_ui_exit: bool = False
+
+
 def load(path: str | Path) -> dict[str, Any]:
     config_path = Path(path)
     if not config_path.exists():

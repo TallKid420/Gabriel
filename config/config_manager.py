@@ -214,38 +214,3 @@ class ConfigManager:
             "system_prompt": agent.system_prompt,
             **agent.extra,
         }
-
-
-# =========================
-# Example Usage
-# =========================
-
-# if __name__ == "__main__":
-#     manager = ConfigManager("agents.yaml")
-
-#     print("\nEnabled Agents:")
-#     for agent in manager.get_enabled_agents():
-#         print(f" - {agent.name} ({agent.type})")
-
-#     print("\nAdding new agent...\n")
-
-#     manager.add_agent(
-#         {
-#             "name": "code-reviewer",
-#             "type": "engineer",
-#             "provider": "ollama",
-#             "model": "deepseek-coder",
-#             "endpoint": "http://localhost:11434",
-#             "tools": [
-#                 "git_read",
-#                 "code_analysis"
-#             ],
-#             "timeout_seconds": 30,
-#             "enabled": True,
-#         }
-#     )
-
-#     runtime = manager.build_runtime_config("code-reviewer")
-
-#     print("Runtime Config:")
-#     print(runtime)

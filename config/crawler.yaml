@@ -1,0 +1,33 @@
+crawler:
+  db_path: database/links.sqlite
+  raw_dir: data/raw
+  files_dir: data/files
+  chroma_db_path: database/chroma
+
+  ollama_base_url: http://jcs-macbook-pro:11434
+  embedding_model: bge-m3
+  llm_model: mistral:v0.3
+
+  crawl_interval_sec: 60
+  crawl_batch_size: 10
+  browser_instances: 1
+  max_concurrent_per_instance: 3
+  request_timeout_seconds: 60
+
+  ingest_interval_sec: 15
+  ingest_batch_size: 10
+
+  allowed_extensions:
+    - .pdf
+    - .txt
+    - .md
+    - .html
+    - .htm
+    - .csv
+    - .json
+    - .xml
+    - .docx
+    - .xlsx
+
+  backpressure_threshold: 100
+  keep_alive_on_ui_exit: false

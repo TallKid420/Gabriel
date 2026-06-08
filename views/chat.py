@@ -30,8 +30,6 @@ def render_streamed_reply(stream) -> str:
 
     for chunk in stream:
 
-        print(f"Received chunk: {chunk}")
-
         match chunk["type"]:
             case "text":
                 rendered_text += chunk["content"]
@@ -52,13 +50,20 @@ def render_streamed_reply(stream) -> str:
 
                     tool_expanders[tool_name] = expander
 
+            case "tool_output":
+                tool_name = chunk["name"]
+                expander = tool_expanders.get(tool_name)
+                if expander:
+                    expander.write(
+                        f"**Intermediate output:**\n```text\n{chunk['content']}\n```"
+                    )
+
             case "tool_end":
                 tool_name = chunk["name"]
 
                 expander = tool_expanders.get(tool_name)
 
                 if expander:
-
                     output = getattr(
                         chunk["output"],
                         "content",

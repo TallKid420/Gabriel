@@ -71,7 +71,6 @@ class ResearcherAgent(BaseAgent):
 
             if name == "messages":
                 if tool_end:
-                    print(f"Received tool message: {item.text}")
                     tool_end = False
                     continue
                 for delta in item.text:
