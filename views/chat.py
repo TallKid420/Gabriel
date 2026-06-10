@@ -29,52 +29,55 @@ def render_streamed_reply(stream) -> str:
     tool_expanders = {}
 
     for chunk in stream:
+        try:
+            match chunk["type"]:
+                case "text":
+                    rendered_text += chunk["content"]
+                    text_container.markdown(rendered_text)
 
-        match chunk["type"]:
-            case "text":
-                rendered_text += chunk["content"]
-                text_container.markdown(rendered_text)
+                case "tool_start":
+                    tool_name = chunk["name"]
 
-            case "tool_start":
-                tool_name = chunk["name"]
+                    with tools_container:
+                        expander = st.expander(
+                            f"Tool: {tool_name}",
+                            expanded=True,
+                        )
 
-                with tools_container:
-                    expander = st.expander(
-                        f"Tool: {tool_name}",
-                        expanded=True,
-                    )
+                        expander.write(
+                            f"**Input:**\n```json\n{chunk['input']}\n```"
+                        )
 
-                    expander.write(
-                        f"**Input:**\n```json\n{chunk['input']}\n```"
-                    )
+                        tool_expanders[tool_name] = expander
 
-                    tool_expanders[tool_name] = expander
+                case "tool_output":
+                    tool_name = chunk["name"]
+                    expander = tool_expanders.get(tool_name)
+                    if expander:
+                        expander.write(
+                            f"**Intermediate output:**\n```text\n{chunk['content']}\n```"
+                        )
 
-            case "tool_output":
-                tool_name = chunk["name"]
-                expander = tool_expanders.get(tool_name)
-                if expander:
-                    expander.write(
-                        f"**Intermediate output:**\n```text\n{chunk['content']}\n```"
-                    )
+                case "tool_end":
+                    tool_name = chunk["name"]
 
-            case "tool_end":
-                tool_name = chunk["name"]
+                    expander = tool_expanders.get(tool_name)
 
-                expander = tool_expanders.get(tool_name)
+                    if expander:
+                        output = getattr(
+                            chunk["output"],
+                            "content",
+                            str(chunk["output"])
+                        )
 
-                if expander:
-                    output = getattr(
-                        chunk["output"],
-                        "content",
-                        str(chunk["output"])
-                    )
+                        expander.write(
+                            f"**Output:**\n```text\n{output}\n```"
+                        )
+        except Exception as e:
+            st.error(f"Error rendering chunk: {e}")
+            continue
 
-                    expander.write(
-                        f"**Output:**\n```text\n{output}\n```"
-                    )
-
-    return rendered_text
+        return rendered_text
 
 
 def maybe_update_title(session: ChatSession) -> None:

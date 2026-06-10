@@ -93,7 +93,7 @@ class AgentExecutor:
 
     def execute_stream(self, agent: BaseAgent, messages: list[dict[str, str]], thread_id: str):
         if not agent.enabled:
-            yield f"Agent '{agent.name}' is disabled"
+            yield {"type": "text", "content": f"Agent '{agent.name}' is disabled"}
             return
         self._validate_type_contract(agent)
         agent.validate()
