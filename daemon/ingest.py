@@ -138,7 +138,7 @@ async def ingest_heartbeat(
                 reason="missing_raw_path",
                 retryable=False,
             )
-            print(f"[ingest] No raw_path for {url}, marking permanent failure")
+            logger.critical(f"[ingest] No raw_path for {url}, marking permanent failure")
             failed_count += 1
             continue
 
@@ -198,14 +198,14 @@ async def ingest_heartbeat(
                     reason=f"unknown_content_kind: {content_kind}",
                     retryable=False,
                 )
-                print(f"[ingest] Unknown content_kind '{content_kind}' for {url}")
+                logger.warning(f"[ingest] Unknown content_kind '{content_kind}' for {url}")
                 failed_count += 1
                 continue
 
         except NotImplementedError as e:
             # File ingestion stub — not retryable until implemented
             queue.mark_ingest_failed(url, reason=str(e), retryable=False)
-            print(f"[ingest] Not implemented for {url}: {e}")
+            logger.warning(f"[ingest] Not implemented for {url}: {e}")
             failed_count += 1
             continue
 
