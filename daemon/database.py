@@ -150,9 +150,84 @@ class VectorDatabase:
         print(f"[save] process_and_store_document complete for {url}")
 
 class Database:
+    def __init__(self, db_path: Path = CP_DB_PATH):
+        self.db_path = db_path
+        self._init_db()
+
     def connect_sync(self) -> sqlite3.Connection:
-        CP_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        return sqlite3.connect(CP_DB_PATH, check_same_thread=False)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _init_db(self) -> None:
+        with self.connect_sync() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tool_registry (
+                    tool_id    TEXT PRIMARY KEY,
+                    enabled    INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+
+    def sync_tool_registry(self, tool_ids: List[str]) -> None:
+        now = _now_iso()
+        with self.connect_sync() as conn:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO tool_registry (tool_id, enabled, updated_at)
+                VALUES (?, 0, ?)
+                """,
+                [(tool_id, now) for tool_id in tool_ids],
+            )
+
+    def get_enabled_tool_ids(self) -> set[str]:
+        """
+        Return all currently enabled tool IDs.
+        """
+        with self.connect_sync() as conn:
+            rows = conn.execute(
+                """
+                SELECT tool_id
+                FROM tool_registry
+                WHERE enabled = 1
+                """
+            ).fetchall()
+
+        return {row["tool_id"] for row in rows}
+
+    def get_tool_states(self) -> Dict[str, bool]:
+        """
+        Return all stored tool states as {tool_id: enabled}.
+        """
+        with self.connect_sync() as conn:
+            rows = conn.execute(
+                """
+                SELECT tool_id, enabled
+                FROM tool_registry
+                """
+            ).fetchall()
+
+        return {row["tool_id"]: bool(row["enabled"]) for row in rows}
+    
+    def set_tool_enabled(self, tool_id: str, enabled: bool) -> None:
+        """
+        Insert or update a tool's enabled state.
+        """
+        now = _now_iso()
+        with self.connect_sync() as conn:
+            conn.execute(
+                """
+                INSERT INTO tool_registry (tool_id, enabled, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(tool_id) DO UPDATE SET
+                    enabled = excluded.enabled,
+                    updated_at = excluded.updated_at
+                """,
+                (tool_id, 1 if enabled else 0, now),
+            )
 
 _SCHEMA_PATH = Path(__file__).resolve().parent.parent / "database" / "schema.sql"
 LQ_DB_PATH = Path(__file__).resolve().parent.parent / "database" / "links.sqlite"

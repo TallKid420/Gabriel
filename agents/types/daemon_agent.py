@@ -4,16 +4,14 @@ from langchain.agents import create_agent
 from langchain_core._api.beta_decorator import LangChainBetaWarning
 from langgraph.checkpoint.sqlite import SqliteSaver
 
+from executor.toolhandler import load_tool_registry
 from agents.base_agent import BaseAgent
-from executor.toolhandler import build_tool_list
 from daemon.database import Database
 
 import warnings
-import asyncio
+import logging
 
-
-TOOLS: list[BaseTool] = []
-
+log = logging.getLogger(__name__)
 
 class DaemonAgent(BaseAgent):
     def validate(self) -> None:
@@ -26,10 +24,13 @@ class DaemonAgent(BaseAgent):
             category=LangChainBetaWarning
         )
 
+        self.db = Database()
+        enabled_ids = self.db.get_enabled_tool_ids()
+        self._registry = load_tool_registry(enabled_ids=enabled_ids)
         self.agent = self._build_runtime()
 
     def get_tools(self) -> list[BaseTool]:
-        return TOOLS
+        return self._registry.resolve_for_agent(self.tools)
 
     def _build_runtime(self):
         

@@ -5,15 +5,13 @@ from langchain_core._api.beta_decorator import LangChainBetaWarning
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from agents.base_agent import BaseAgent
-from executor.toolhandler import build_tool_list
+from executor.toolhandler import load_tool_registry
 from daemon.database import Database
 
 import warnings
-import asyncio
+import logging
 
-
-TOOLS: list[BaseTool] = []
-
+log = logging.getLogger(__name__)
 
 class ChatAgent(BaseAgent):
     def validate(self) -> None:
@@ -26,10 +24,13 @@ class ChatAgent(BaseAgent):
             category=LangChainBetaWarning
         )
 
+        self.db = Database()
+        enabled_ids = self.db.get_enabled_tool_ids()
+        self._registry = load_tool_registry(enabled_ids=enabled_ids)
         self.agent = self._build_runtime()
 
     def get_tools(self) -> list[BaseTool]:
-        return TOOLS
+        return self._registry.resolve_for_agent(self.tools)
 
     def _build_runtime(self):
         
@@ -43,7 +44,7 @@ class ChatAgent(BaseAgent):
             max_tokens=int(self.max_tokens or 1024),
         )
 
-        memory = Database().connect_sync()
+        memory = self.db.connect_sync()
 
         return create_agent(
             model=self.llm,
@@ -102,3 +103,35 @@ class ChatAgent(BaseAgent):
                     "output": item.output,
                     "error": item.error,
                 }
+
+"""
+def run_stream(self, user_input: str, thread_id: str):
+        events = self.agent.stream_events(
+            {"messages": [{"role": "user", "content": user_input}]},
+            config={"configurable": {"thread_id": thread_id}},
+            version="v2",
+        )
+
+        for event in events:
+            kind = event.get("event")
+            data = event.get("data", {})
+
+            if kind == "on_chat_model_stream":
+                chunk = data.get("chunk")
+                if chunk and hasattr(chunk, "content") and chunk.content:
+                    yield {"type": "text", "content": chunk.content}
+
+            elif kind == "on_tool_start":
+                yield {
+                    "type": "tool_start",
+                    "name": event.get("name"),
+                    "input": data.get("input"),
+                }
+
+            elif kind == "on_tool_end":
+                yield {
+                    "type": "tool_end",
+                    "name": event.get("name"),
+                    "output": str(data.get("output", "")),
+                }
+"""

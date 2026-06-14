@@ -5,13 +5,13 @@ from langchain_core._api.beta_decorator import LangChainBetaWarning
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from agents.base_agent import BaseAgent
-from executor.toolhandler import build_tool_list
+from executor.toolhandler import load_tool_registry
 from daemon.database import Database
 
 import warnings
+import logging
 
-
-TOOLS: list[BaseTool] = build_tool_list(["database", "research"])
+log = logging.getLogger(__name__)
 
 
 class ResearcherAgent(BaseAgent):
@@ -25,10 +25,13 @@ class ResearcherAgent(BaseAgent):
             category=LangChainBetaWarning
         )
 
+        self.db = Database()
+        enabled_ids = self.db.get_enabled_tool_ids()
+        self._registry = load_tool_registry(enabled_ids=enabled_ids)
         self.agent = self._build_runtime()
 
     def get_tools(self) -> list[BaseTool]:
-        return TOOLS
+        return self._registry.resolve_for_agent(self.tools)
 
     def _build_runtime(self):
         

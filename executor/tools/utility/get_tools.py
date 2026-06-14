@@ -1,6 +1,6 @@
 import inspect
 
-import hermes.executor as executor_package
+import executor as executor_package
 from executor.toolhandler import discover_tools_by_folder
 from langchain_core.tools import tool
 

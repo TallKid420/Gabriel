@@ -1,6 +1,6 @@
 import os
 import shutil
-from hermes.executor.tool_helpers import _expand_path, _is_protected_path
+from executor.tool_helpers import _expand_path, _is_protected_path
 from langchain_core.tools import tool
 
 

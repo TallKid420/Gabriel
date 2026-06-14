@@ -1,6 +1,6 @@
 import subprocess
 import sys
-from hermes.executor.tool_helpers import _normalize_shell_command
+from executor.tool_helpers import _normalize_shell_command
 from langchain_core.tools import tool
 
 
