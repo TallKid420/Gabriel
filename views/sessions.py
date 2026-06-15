@@ -38,19 +38,20 @@ class SessionManager:
 def _render_session_card(session_id: str, session: ChatSession) -> None:
     label = session.title or "New chat"
     is_active = session_id == st.session_state.get("active_session_id")
-    status = "🟢 Active" if is_active else "⚪ Open"
+    status = "🟢" if is_active else "⚪"
 
-    with st.container():
-        cols = st.columns([6, 3, 1])
-        with cols[0]:
+    with st.container(border=True):
+        col1, col2 = st.columns([1, 8])
+        with col1:
+            st.markdown(f"<div style='text-align: center; font-size: 1.2em;'>{status}</div>", unsafe_allow_html=True)
+        with col2:
             if st.button(label, key=f"session_select_{session_id}", use_container_width=True, on_click=lambda sid=session_id: st.session_state.__setitem__("active_session_id", sid)):
                 pass
-            st.caption(f"Agent: {session.agent_name or '—'} • Messages: {len(session.messages)}")
-        with cols[1]:
-            st.markdown(f"**{status}**")
-            st.caption(session.created_at)
-        with cols[2]:
-            if st.button("✕", key=f"session_delete_{session_id}", on_click=lambda sid=session_id: SessionManager.delete_session(sid)):
+            st.caption(f"**Messages:** {len(session.messages)} • **Created:** {session.created_at}")
+
+        col_del = st.columns([11, 1])
+        with col_del[1]:
+            if st.button("✕", key=f"session_delete_{session_id}", on_click=lambda sid=session_id: SessionManager.delete_session(sid), help="Delete session"):
                 pass
 
 
@@ -66,23 +67,31 @@ def session_ui() -> None:
     st.write("Browse, open, and manage your saved chats.")
 
     total_sessions = len(st.session_state.sessions)
-    active_id = st.session_state.active_session_id
-    active_title = st.session_state.sessions.get(active_id).title if active_id in st.session_state.sessions else "—"
+    st.metric("Total sessions", total_sessions)
 
-    left, right = st.columns([3, 1])
+    if total_sessions == 0:
+        st.info("No saved sessions found. Create a new chat to get started.")
+    else:
+        # Group sessions by agent
+        sessions_by_agent = {}
+        for session_id, session in st.session_state.sessions.items():
+            agent = session.agent_name or "No Agent"
+            if agent not in sessions_by_agent:
+                sessions_by_agent[agent] = []
+            sessions_by_agent[agent].append((session_id, session))
 
-    with right:
-        st.metric("Total sessions", total_sessions)
+        # Sort agent names alphabetically
+        sorted_agents = sorted(sessions_by_agent.keys())
 
-    with left:
-        if total_sessions == 0:
-            st.info("No saved sessions found. Create a new chat to get started.")
-        else:
-            for session_id, session in st.session_state.sessions.items():
-                _render_session_card(session_id, session)
-                st.divider()
+        for agent in sorted_agents:
+            with st.expander(f"🤖 {agent}", expanded=True):
+                cols = st.columns(2)
+                for idx, (session_id, session) in enumerate(sessions_by_agent[agent]):
+                    with cols[idx % 2]:
+                        _render_session_card(session_id, session)
 
-    st.markdown("### Enabled Agents")
+    st.divider()
+    st.subheader("Start New Chat")
     enabled_agents = None
     try:
         enabled_agents = st.session_state.config_manager.get_enabled_agents()
@@ -91,7 +100,7 @@ def session_ui() -> None:
 
     if enabled_agents:
         names = [f"{agent.name} ({agent.type})" for agent in enabled_agents]
-        selected_name = st.selectbox("Choose agent", options=names, index=0)
+        selected_name = st.selectbox("Choose agent", options=names, index=0, label_visibility="collapsed")
         selected_agent = enabled_agents[names.index(selected_name)]
         st.button(
             "Chat with selected agent",
