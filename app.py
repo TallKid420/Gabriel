@@ -6,7 +6,7 @@ import streamlit as st
 import uuid
 from agents.executor import AgentExecutor
 from config.config_manager import ConfigManager
-from daemon.daemon import ServerDaemon
+from daemon.client import DaemonClient
 
 SESSIONS_FILE = Path(__file__).resolve().parent / "database" / "sessions.json"
 
@@ -72,7 +72,7 @@ def ensure_state() -> None:
     if "agent_executor" not in st.session_state:
         st.session_state.agent_executor = AgentExecutor()
     if "daemon" not in st.session_state:
-        st.session_state.daemon = ServerDaemon()
+        st.session_state.daemon = DaemonClient()
     if "last_manual_agent_name" not in st.session_state:
         st.session_state.last_manual_agent_name = None
     if "sessions" not in st.session_state:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import signal
 import threading
 import time
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -12,8 +13,6 @@ from config.config_manager import ConfigManager
 
 from psycopg_pool import AsyncConnectionPool
 from psycopg.rows import dict_row
-
-import asyncio
 
 
 @dataclass
@@ -146,6 +145,7 @@ class ServerDaemon:
             return {
                 "name": self.config.name,
                 "running": self._running,
+                "pid": os.getpid(),
                 "started_at": self._started_at,
                 "tick_count": self._tick_count,
                 "tick_interval_sec": self.config.tick_interval_sec,
@@ -169,6 +169,7 @@ def create_app() -> Any:
 
     daemon = ServerDaemon()
     app = FastAPI(title="Sample Daemon API", version="0.1.0")
+    app.state.daemon = daemon
 
     class StartResponse(BaseModel):
         started: bool
@@ -180,6 +181,38 @@ def create_app() -> Any:
 
     class StatusResponse(BaseModel):
         status: dict[str, Any]
+
+    class ConfigPatchRequest(BaseModel):
+        tick_interval_sec: float | None = None
+        shutdown_timeout_sec: float | None = None
+        name: str | None = None
+
+    class ConfigResponse(BaseModel):
+        config: dict[str, Any]
+
+    @app.get("/daemon/config", response_model=ConfigResponse)
+    def get_config() -> ConfigResponse:
+        return ConfigResponse(config={
+            "name": daemon.config.name,
+            "tick_interval_sec": daemon.config.tick_interval_sec,
+            "shutdown_timeout_sec": daemon.config.shutdown_timeout_sec,
+            "config_path": daemon.config.config_path,
+        })
+
+    @app.patch("/daemon/config", response_model=ConfigResponse)
+    def patch_config(req: ConfigPatchRequest) -> ConfigResponse:
+        if req.tick_interval_sec is not None:
+            daemon.config.tick_interval_sec = req.tick_interval_sec
+        if req.shutdown_timeout_sec is not None:
+            daemon.config.shutdown_timeout_sec = req.shutdown_timeout_sec
+        if req.name is not None:
+            daemon.config.name = req.name
+        return ConfigResponse(config={
+            "name": daemon.config.name,
+            "tick_interval_sec": daemon.config.tick_interval_sec,
+            "shutdown_timeout_sec": daemon.config.shutdown_timeout_sec,
+            "config_path": daemon.config.config_path,
+        })
 
     @app.on_event("startup")
     def on_startup() -> None:

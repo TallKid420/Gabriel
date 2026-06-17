@@ -1,0 +1,1 @@
+powershell Get-Content logs\daemon.log -Wait

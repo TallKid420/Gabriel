@@ -36,7 +36,6 @@ def settings_ui():
         if not all_agents:
             st.warning("No agents found in configuration.")
         else:
-            # Group by type
             agent_types = sorted(list(set(agent.type for agent in all_agents)))
 
             for agent_type in agent_types:
@@ -77,84 +76,88 @@ def settings_ui():
         with col1:
             st.subheader("Daemon Settings")
 
-            # Tick interval
+            # Fetch live config from daemon process via HTTP
+            current_config = daemon.get_config()
+            daemon_reachable = bool(current_config)
+
+            if not daemon_reachable:
+                st.warning("Daemon is not running. Start it to edit configuration.")
+
             tick_interval = st.number_input(
                 "Tick Interval (seconds)",
                 min_value=0.1,
                 max_value=300.0,
-                value=daemon.config.tick_interval_sec,
+                value=float(current_config.get("tick_interval_sec", 1.0)),
                 step=0.1,
-                help="How often the daemon runs its tick loop"
+                disabled=not daemon_reachable,
+                help="How often the daemon runs its tick loop",
             )
 
-            if tick_interval != daemon.config.tick_interval_sec:
-                daemon.config.tick_interval_sec = tick_interval
-                st.success("Tick interval updated")
-
-            # Shutdown timeout
             shutdown_timeout = st.number_input(
                 "Shutdown Timeout (seconds)",
                 min_value=1,
                 max_value=60,
-                value=int(daemon.config.shutdown_timeout_sec),
+                value=int(current_config.get("shutdown_timeout_sec", 5)),
                 step=1,
-                help="How long to wait for daemon to shut down gracefully"
+                disabled=not daemon_reachable,
+                help="How long to wait for daemon to shut down gracefully",
             )
 
-            if shutdown_timeout != daemon.config.shutdown_timeout_sec:
-                daemon.config.shutdown_timeout_sec = float(shutdown_timeout)
-                st.success("Shutdown timeout updated")
-
-            # Daemon name
             daemon_name = st.text_input(
                 "Daemon Name",
-                value=daemon.config.name,
-                help="Identifier for this daemon instance"
+                value=current_config.get("name", "sample-daemon"),
+                disabled=not daemon_reachable,
+                help="Identifier for this daemon instance",
             )
 
-            if daemon_name != daemon.config.name:
-                daemon.config.name = daemon_name
-                st.success("Daemon name updated")
+            if daemon_reachable and st.button("Apply Config", use_container_width=True):
+                result = daemon.patch_config(
+                    tick_interval_sec=tick_interval,
+                    shutdown_timeout_sec=float(shutdown_timeout),
+                    name=daemon_name,
+                )
+                if "error" in result:
+                    st.error(f"Failed to apply: {result['error']}")
+                else:
+                    st.success("Configuration updated")
+                    st.rerun()
 
         with col2:
             st.subheader("Daemon Status")
 
-            # Display daemon status
             status = daemon.status()
 
             status_col1, status_col2 = st.columns(2)
             with status_col1:
-                if status["running"]:
+                if status.get("running"):
                     st.success("🟢 Running")
                 else:
                     st.info("⚪ Stopped")
-
             with status_col2:
-                tick_count = status["tick_count"]
-                st.metric("Ticks", tick_count)
+                st.metric("Ticks", status.get("tick_count", "—"))
 
-            # Control buttons
             col_start, col_stop = st.columns(2)
             with col_start:
                 if st.button("▶️ Start Daemon", use_container_width=True):
-                    if daemon.start():
-                        st.success("Daemon started")
-                        st.rerun()
+                    result = daemon.start()
+                    if result.get("started"):
+                        st.success(f"Daemon started (PID {result.get('pid')})")
                     else:
-                        st.warning("Daemon already running")
+                        st.warning(result.get("message", "Already running"))
+                    st.rerun()
 
             with col_stop:
                 if st.button("⏹️ Stop Daemon", use_container_width=True):
-                    if daemon.stop():
+                    result = daemon.stop()
+                    if result.get("stopped"):
                         st.success("Daemon stopped")
-                        st.rerun()
                     else:
-                        st.warning("Daemon not running")
+                        st.warning(result.get("message", "Not running"))
+                    st.rerun()
 
             st.divider()
 
-            # Show last execution results
-            if status["last_results"]:
+            if status.get("last_results"):
                 st.subheader("Last Execution Results")
                 for result in status["last_results"]:
                     with st.expander(f"Agent: {result['agent_name']}", expanded=False):
