@@ -20,26 +20,12 @@ Gabriel is a Streamlit-based AI agent chat application with session management, 
 - `executor/` - Tool handling and provider integrations
 - `database/` - Persistent session storage and checkpoints
 
-## Requirements
-
-The project requires Python and packages listed in `requirements.txt`.
-
-Example required packages:
-
-- `fastapi`
-- `uvicorn[standard]`
-- `pydantic`
-- `streamlit`
-- `langchain-core`
-- `langchain-ollama`
-- `PyYAML`
-
 ## Setup
 
 1. Create the virtual environment:
 
 ```powershell
-python -m venv venv
+python -m venv .venv
 ```
 
 2. Activate the virtual environment:

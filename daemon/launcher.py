@@ -3,8 +3,10 @@ import subprocess, sys, os
 import daemon_process
 import logging
 
-LOG_FILE = Path(__file__).resolve().parent / "logs" / "daemon.log"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+LOG_FILE = _PROJECT_ROOT / "logs" / "daemon.log"
 DAEMON_SCRIPT = Path(daemon_process.__file__).resolve()
+
 log = logging.getLogger("gabriel.launcher")
 
 class LinuxLauncher():

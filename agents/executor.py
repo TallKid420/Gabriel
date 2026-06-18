@@ -64,7 +64,6 @@ class AgentExecutor:
             temperature=float(agent.temperature),
             model=agent.model,
             system_prompt=agent.system_prompt or "",
-            tools=list(agent.tools),
             enabled=bool(agent.enabled),
             extra={
                 "top_p": float(agent.top_p),
@@ -103,6 +102,5 @@ class AgentExecutor:
         stream_fn = getattr(runtime_agent, "run_stream", None)
         
         if callable(stream_fn):
-            for chunk in stream_fn(user_input, thread_id):
-                yield chunk
-            return
+            yield from stream_fn(user_input, thread_id)
+

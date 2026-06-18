@@ -58,8 +58,10 @@ class DaemonClient:
 
         deadline = time.time() + _STARTUP_TIMEOUT_SEC
         while time.time() < deadline:
+            info = get_running_daemon()
             if info:
-                return {"started": True, "pid": pid}
+                self._base = f"http://127.0.0.1:{info['port']}"
+                return {"started": True, "pid": pid, "port": info["port"]}
             time.sleep(_STARTUP_POLL_INTERVAL)
 
         return {"started": False, "error": "Daemon did not become ready in time"}
@@ -79,8 +81,8 @@ class DaemonClient:
             return r.json()["status", {}]
         except RuntimeError:
             return {"running": False, "tick_count": 0, "last_results": []}
-        except Exception:
-            return {"running": False, "error": "Daemon unreachable"}
+        except Exception as e:
+            return {"running": False, "error": f"Daemon unreachable: {str(e)}"}
 
     def is_reachable(self) -> bool:
         try:

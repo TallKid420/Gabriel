@@ -8,3 +8,4 @@ venv/
 database/*.db
 database/*.sqlite
 database/sessions.json
+.vscode

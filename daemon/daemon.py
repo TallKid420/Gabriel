@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import signal
 import threading
-import time
-import os
+import time, os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from daemon.pid_lock import _PROJECT_ROOT
 from agents.types.daemon_agent import DaemonAgent
 from agents.executor import AgentExecutor, AgentExecutionResult
 from config.config_manager import ConfigManager
@@ -60,6 +61,9 @@ class ServerDaemon:
     def install_signal_handlers(self) -> None:
         signal.signal(signal.SIGINT, self._handle_stop_signal)
         signal.signal(signal.SIGTERM, self._handle_stop_signal)
+
+    def _config_path(self) -> Path:
+        return _PROJECT_ROOT / self.config.config_path
 
     def _handle_stop_signal(self, signum: int, frame: Any) -> None:
         self.stop()

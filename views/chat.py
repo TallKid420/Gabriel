@@ -31,24 +31,24 @@ def render_streamed_reply(stream) -> str:
     for chunk in stream:
         try:
             match chunk["type"]:
-                case "text":
-                    rendered_text += chunk["content"]
-                    text_container.markdown(rendered_text)
+                case "messages":
+                    token, metadata = chunk["data"]
+                    text = ""  # ← initialize FIRST
+                    if isinstance(token.content, str):
+                        text = token.content
+                    elif isinstance(token.content, list) and token.content:
+                        text = token.content[0].get("text", "")
+                    if text:
+                        rendered_text += text
+                        text_container.markdown(rendered_text)
 
                 case "tool_start":
                     tool_name = chunk["name"]
 
                     with tools_container:
-                        expander = st.expander(
-                            f"Tool: {tool_name}",
-                            expanded=True,
-                        )
-
-                        expander.write(
-                            f"**Input:**\n```json\n{chunk['input']}\n```"
-                        )
-
-                        tool_expanders[tool_name] = expander
+                        expander = st.expander(f"Tool: {tool_name}", expanded=True)
+                        expander.write(f"**Input:**\n```json\n{chunk['input']}\n```")
+                    tool_expanders[tool_name] = expander
 
                 case "tool_output":
                     tool_name = chunk["name"]
@@ -77,7 +77,7 @@ def render_streamed_reply(stream) -> str:
             st.error(f"Error rendering chunk: {e}")
             continue
 
-        return rendered_text
+    return rendered_text
 
 
 def maybe_update_title(session: ChatSession) -> None:

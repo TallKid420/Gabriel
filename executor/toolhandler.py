@@ -12,6 +12,33 @@ import re
 
 log = logging.getLogger(__name__)
 
+_registry_cache: "ToolRegistry | None" = None
+_registry_mtimes: dict[str, float] = {}
+
+def _tools_root() -> Path:
+    return Path(__file__).resolve().parent / "tools"
+
+def _scan_mtimes() -> dict[str, float]:
+    root = _tools_root()
+    mtimes: dict[str, float] = {}
+    for folder in root.iterdir():
+        if not folder.is_dir() or folder.name.startswith("_"):
+            continue
+        for script_path in folder.glob("*.py"):
+            if script_path.name == "__init__.py":
+                continue
+            try:
+                mtimes[str(script_path)] = script_path.stat().st_mtime
+            except OSError:
+                pass
+    return mtimes
+
+
+def _registry_is_stale() -> bool:
+    if _registry_cache is None:
+        return True
+    current = _scan_mtimes()
+    return current != _registry_mtimes
 
 class ToolLogger(BaseCallbackHandler):
     def on_tool_start(self, serialized, input_str, **kwargs):
@@ -45,6 +72,7 @@ class ToolRegistry:
         return list(self._tools.values())
 
     def resolve_for_agent(self, tool_ids: List[str]) -> list[BaseTool]:
+        print(f"tool ids: {tool_ids}")
         resolved = []
         for tool_id in tool_ids:
             record = self._tools.get(tool_id)
@@ -66,8 +94,15 @@ class ToolRegistry:
 
 
 def load_tool_registry(enabled_ids: Optional[set[str]] = None) -> ToolRegistry:
+    global _registry_cache, _registry_mtimes
+
+    if not _registry_is_stale():
+        log.debug("Tool registry cache hit - skipping re-index.")
+        return _registry_cache
+    
+    log.info("Tool registry stale or missing - re-indexing tools.")
     registry = ToolRegistry()
-    root = Path(__file__).resolve().parent / "tools"
+    root = _tools_root()
 
     for folder in sorted(root.iterdir()):
         if not folder.is_dir() or folder.name.startswith("_"):
@@ -115,7 +150,9 @@ def load_tool_registry(enabled_ids: Optional[set[str]] = None) -> ToolRegistry:
                 )
 
                 registry.register(record)
-                
+
+    _registry_cache = registry
+    _registry_mtimes = _scan_mtimes()     
     return registry
 
 

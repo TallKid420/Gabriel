@@ -61,77 +61,10 @@ class ChatAgent(BaseAgent):
         return response["messages"][-1].content
 
     def run_stream(self, user_input: str, thread_id: str):
-
-        stream = self.agent.stream_events(
+        stream = self.agent.stream(
             {"messages": [{"role": "user", "content": user_input}]},
             config={"configurable": {"thread_id": thread_id}},
-            version="v3",
-        )
-
-        tool_end = False
-        for name, item in stream.interleave("messages", "tool_calls"):
-
-            if name == "messages":
-                if tool_end:
-                    tool_end = False
-                    continue
-                for delta in item.text:
-                    yield {
-                        "type": "text",
-                        "content": delta,
-                    }
-
-            elif name == "tool_calls":
-
-                yield {
-                    "type": "tool_start",
-                    "name": item.tool_name,
-                    "input": item.input,
-                }
-
-                for delta in item.output_deltas:
-                    yield {
-                        "type": "tool_output",
-                        "name": item.tool_name,
-                        "content": delta,
-                    }
-
-                tool_end = True
-                yield {
-                    "type": "tool_end",
-                    "name": item.tool_name,
-                    "output": item.output,
-                    "error": item.error,
-                }
-
-"""
-def run_stream(self, user_input: str, thread_id: str):
-        events = self.agent.stream_events(
-            {"messages": [{"role": "user", "content": user_input}]},
-            config={"configurable": {"thread_id": thread_id}},
+            stream_mode="messages",
             version="v2",
         )
-
-        for event in events:
-            kind = event.get("event")
-            data = event.get("data", {})
-
-            if kind == "on_chat_model_stream":
-                chunk = data.get("chunk")
-                if chunk and hasattr(chunk, "content") and chunk.content:
-                    yield {"type": "text", "content": chunk.content}
-
-            elif kind == "on_tool_start":
-                yield {
-                    "type": "tool_start",
-                    "name": event.get("name"),
-                    "input": data.get("input"),
-                }
-
-            elif kind == "on_tool_end":
-                yield {
-                    "type": "tool_end",
-                    "name": event.get("name"),
-                    "output": str(data.get("output", "")),
-                }
-"""
+        yield from stream

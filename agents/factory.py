@@ -29,7 +29,6 @@ class AgentFactory:
             "top_p": config.extra.get("top_p", 1.0),
             "max_tokens": config.extra.get("max_tokens"),
             "context_window": config.extra.get("context_window"),
-            "tools": config.tools,
             "system_prompt": config.system_prompt,
             "agent_id": config.agent_id,
             **config.extra,
