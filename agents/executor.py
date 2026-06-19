@@ -32,9 +32,10 @@ class AgentExecutor:
         pass
 
     def _build_enabled_skills(self, agent: BaseAgent) -> dict[str, bool]:
-        configured_tools = set(agent.tools)
-        discovered_tools = {tool.name for tool in agent.get_tools() if getattr(tool, "name", None)}
-        return {tool_name: True for tool_name in configured_tools | discovered_tools}
+        discovered_tools = {
+            tool.name for tool in agent.get_tools() if getattr(tool, "name", None)
+        }
+        return {tool_name: True for tool_name in discovered_tools}
 
     def _expected_type_for(self, agent: BaseAgent) -> str | None:
         for agent_class, expected_type in self.TYPE_CONTRACTS:

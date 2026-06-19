@@ -18,7 +18,7 @@ class AgentConfig:
     temperature: float
     model: str
     system_prompt: str
-    tools: list[str] = field(default_factory=list)
+    # tools: list[str] = field(default_factory=list)
     schedule: str | None = None
     trigger: str | None = None
     enabled: bool = True
@@ -91,7 +91,7 @@ def _agent_from_dict(entry: dict[str, Any]) -> AgentConfig:
         "temperature",
         "model",
         "system_prompt",
-        "tools",
+        # "tools",
         "schedule",
         "trigger",
         "enabled",
@@ -122,7 +122,7 @@ def _agent_from_dict(entry: dict[str, Any]) -> AgentConfig:
         timeout_seconds=int(entry.get("timeout_seconds", 60)),
         model=str(entry["model"]),
         system_prompt=str(entry.get("system_prompt", "")),
-        tools=list(entry.get("tools", [])),
+        # tools=list(entry.get("tools", [])),
         schedule=entry.get("schedule"),
         trigger=entry.get("trigger"),
         enabled=bool(entry.get("enabled", True)),

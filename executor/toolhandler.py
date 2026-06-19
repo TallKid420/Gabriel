@@ -54,7 +54,6 @@ class ToolRecord:
     category: str
     callable: BaseTool
     description: str = ""
-    enabled: bool = False
 
 class ToolRegistry:
     def __init__(self):
@@ -71,29 +70,24 @@ class ToolRegistry:
     def list_tools(self) -> List[ToolRecord]:
         return list(self._tools.values())
 
-    def resolve_for_agent(self, tool_ids: List[str]) -> list[BaseTool]:
-        print(f"tool ids: {tool_ids}")
-        resolved = []
-        for tool_id in tool_ids:
+    def tool_ids(self) -> List[str]:
+        return list(self._tools.keys())
+    
+    def resolve_enable(self, enabled_ids: Optional[set[str]]) -> list[BaseTool]:
+        if not enabled_ids:
+            return []
+        
+        resolved: list[BaseTool] = []
+        for tool_id in enabled_ids:
             record = self._tools.get(tool_id)
             if record is None:
-                log.warning(f"Tool ID not found in registry: {tool_id}")
-                continue
-            if not record.enabled:
-                log.debug(f"Tool disabled, skipping: {tool_id}")
+                log.warning(f"Enabked tool ID not found in registry: {tool_id}")
                 continue
             resolved.append(record.callable)
         return resolved
 
-    def requires_approval(self, tool_id: str):
-        record = self._tools.get(tool_id)
-        return record.requires_approval if record else False
 
-    def get_enabled_tools(self) -> list[BaseTool]:
-        return [record.callable for record in self._tools.values() if record.enabled]
-
-
-def load_tool_registry(enabled_ids: Optional[set[str]] = None) -> ToolRegistry:
+def load_tool_registry() -> ToolRegistry:
     global _registry_cache, _registry_mtimes
 
     if not _registry_is_stale():
@@ -131,14 +125,6 @@ def load_tool_registry(enabled_ids: Optional[set[str]] = None) -> ToolRegistry:
                 tool_id = f"{category}.{value.name}"
                 display_name = str(value.name).replace("_", " ").title()
                 description = getattr(value, "description", "") or ""
-
-
-                #TODO if broken use: enabled = tool_id in enabled_ids if enabled_ids is not None else True
-                enabled = {
-                    tool_id in enabled_ids
-                    if enabled_ids is not None
-                    else True
-                }
                 
                 record = ToolRecord(
                     id=tool_id,
@@ -146,7 +132,6 @@ def load_tool_registry(enabled_ids: Optional[set[str]] = None) -> ToolRegistry:
                     category=category,
                     description=description,
                     callable=value,
-                    enabled=enabled,
                 )
 
                 registry.register(record)

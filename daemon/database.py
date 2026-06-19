@@ -160,73 +160,153 @@ class Database:
         conn.row_factory = sqlite3.Row
         return conn
 
+    _REQUIRED_COLLUMS = {
+        "agents": {"agent_id", "name", "updated_at"},
+        "agent_tools": {"agent_id", "tool_id", "enabled", "updated_at"},
+    }
+
+    def _existing_columns(self, conn: sqlite3.Connection, table: str) -> set[str]:
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return {row["name"] for row in rows}
+    
+    def _reconcile_legacy_schema(self, conn: sqlite3.Connection) -> None:
+        for table, required in self._REQUIRED_COLLUMS.items():
+            cols = self._existing_columns(conn, table)
+            if cols and not required.issubset(cols):
+                logger.warning(
+                    "Rebuilding incompatible legacy '%s' table "
+                    "(found columns %s, expected %s)",
+                )
+                conn.execute(f"DROP TABLE IF EXISTS {table}")
+
     def _init_db(self) -> None:
         with self.connect_sync() as conn:
+            self._reconcile_legacy_schema(conn)
+
             conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS tool_registry (
-                    tool_id    TEXT PRIMARY KEY,
-                    enabled    INTEGER NOT NULL DEFAULT 0,
+                CREATE TABLE IF NOT EXISTS agents (
+                    agent_id   TEXT PRIMARY KEY,
+                    name       TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
                 """
             )
 
-    def sync_tool_registry(self, tool_ids: List[str]) -> None:
-        now = _now_iso()
-        with self.connect_sync() as conn:
-            conn.executemany(
+            conn.execute(
                 """
-                INSERT OR IGNORE INTO tool_registry (tool_id, enabled, updated_at)
-                VALUES (?, 0, ?)
-                """,
-                [(tool_id, now) for tool_id in tool_ids],
+                CREATE TABLE IF NOT EXISTS agent_tools (
+                    agent_id    TEXT NOT NULL,
+                    tool_id     TEXT NOT NULL,
+                    enabled     INTEGER NOT NULL DEFAULT 0,
+                    updated_at  TEXT NOT NULL,
+                    PRIMARY KEY (agent_id, tool_id)
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_agent_tools_agent ON agent_tools (agent_ids)"
             )
 
-    def get_enabled_tool_ids(self) -> set[str]:
-        """
-        Return all currently enabled tool IDs.
-        """
-        with self.connect_sync() as conn:
-            rows = conn.execute(
-                """
-                SELECT tool_id
-                FROM tool_registry
-                WHERE enabled = 1
-                """
-            ).fetchall()
-
-        return {row["tool_id"] for row in rows}
-
-    def get_tool_states(self) -> Dict[str, bool]:
-        """
-        Return all stored tool states as {tool_id: enabled}.
-        """
-        with self.connect_sync() as conn:
-            rows = conn.execute(
-                """
-                SELECT tool_id, enabled
-                FROM tool_registry
-                """
-            ).fetchall()
-
-        return {row["tool_id"]: bool(row["enabled"]) for row in rows}
-    
-    def set_tool_enabled(self, tool_id: str, enabled: bool) -> None:
-        """
-        Insert or update a tool's enabled state.
-        """
+    def register_agent(self, agent_id: str, name: str) -> None:
         now = _now_iso()
         with self.connect_sync() as conn:
             conn.execute(
                 """
-                INSERT INTO tool_registry (tool_id, enabled, updated_at)
+                INSERT INTO agents (agent_id, name, updated_at)
                 VALUES (?, ?, ?)
-                ON CONFLICT(tool_id) DO UPDATE SET
+                ON CONFLICT(agent_id) DO UPDATE SET
+                    name = excluded.name,
+                    updated_at = excluded.updated_at
+                """,
+                (str(agent_id), str(name), now),
+            )
+
+    def sync_agents(self, agents: List[tuple]) -> None:
+        now = _now_iso()
+        rows = [(str(agent_id), str(name), now) for agent_id, name in agents]
+        if not rows:
+            return
+        with self.connect_sync() as conn:
+            conn.executemany(
+                """
+                INSERT INTO agents (agent_id, name, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(agent_ids) DO UPDATE SET
+                    name = excluded.name,
+                    updated_at = excluded.updated_at
+                """,
+                rows,
+            )
+
+    def get_agents(self) -> List[Dict[str, str]]:
+        with self.connect_sync() as conn:
+            rows = conn.execute(
+                "SELECT agent_id, name FROM agents ORDER BY name COLLATE NOCASE"
+            ).fetchall()
+
+        return [{"agent_id": row["agent_id"], "name": row["name"]} for row in rows]
+
+    def sync_agent_tools(self, agent_id: str, tool_ids: List[str] | None = None) -> None:
+        
+        if tool_ids is None:
+            # If tool_ids is equal to literal object None
+            from executor.toolhandler import load_tool_registry
+
+            tool_ids = [record.id for record in load_tool_registry().list_tools()]
+
+        if not tool_ids:
+            # If tool_ids is equal to []
+            return
+        
+        now = _now_iso() 
+        with self.connect_sync() as conn:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO agent_tools (agent_id, tool_id, enabled, updated_at)
+                VALUES (?, ?, 0, ?)
+                """,
+                [(str(agent_id), tool_id, now) for tool_id in tool_ids],
+            )
+
+    def get_agent_tool_states(self, agent_id: str) -> Dict[str, bool]:
+        with self.connect_sync() as conn:
+            rows = conn.execute(
+                """
+                SELECT tool_id, enabled
+                FROM agent_tools
+                WHERE agent_id = ?
+                """,
+                (str(agent_id),),
+            ).fetchall()
+
+        return {row["tool_id"]: bool(row["enabled"]) for row in rows}
+    
+    
+    def get_enabled_tool_ids(self, agent_id: str) -> set[str]:
+        with self.connect_sync() as conn:
+            rows = conn.execute(
+                """
+                SELECT tool_id
+                FROM agent_tools
+                WHERE agent_id = ? AND enabled = 1
+                """,
+                (str(agent_id),),
+            ).fetchall()
+        return {row["tool_id"] for row in rows}
+    
+    def set_agent_tool_enabled(self, agent_id: str, tool_id: str, enabled: bool) -> None:
+        now = _now_iso()
+        with self.connect_sync() as conn:
+            conn.execute(
+                """
+                INSERT INTO agent_tools (agent_id, tool_id, enabled, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(agent_id, tool_id) DO UPDATE SET
                     enabled = excluded.enabled,
                     updated_at = excluded.updated_at
                 """,
-                (tool_id, 1 if enabled else 0, now),
+                (str(agent_id), tool_id, 1 if enabled else 0, now),
             )
 
 _SCHEMA_PATH = Path(__file__).resolve().parent.parent / "database" / "schema.sql"
