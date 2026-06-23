@@ -73,7 +73,7 @@ class ToolRegistry:
     def tool_ids(self) -> List[str]:
         return list(self._tools.keys())
     
-    def resolve_enable(self, enabled_ids: Optional[set[str]]) -> list[BaseTool]:
+    def resolve_enabled(self, enabled_ids: Optional[set[str]]) -> list[BaseTool]:
         if not enabled_ids:
             return []
         

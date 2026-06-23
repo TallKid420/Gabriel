@@ -26,7 +26,7 @@ class ChatAgent(BaseAgent):
 
         self.db = Database()
         self._registry = load_tool_registry()
-        self.db.sync_tool_registry(self.agent_id, self._registry.tool_ids())
+        self.db.sync_agent_tools(self.agent_id, self._registry.tool_ids())
         self._enabled_tool_ids = self.db.get_enabled_tool_ids(self.agent_id)
         self.agent = self._build_runtime()
 
@@ -46,10 +46,10 @@ class ChatAgent(BaseAgent):
         )
 
         memory = self.db.connect_sync()
-
+        resolved = self.get_tools()
         return create_agent(
             model=self.llm,
-            tools=self.get_tools(),
+            tools=resolved,
             system_prompt=self.system_prompt,
             checkpointer=SqliteSaver(memory),
         )

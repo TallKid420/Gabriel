@@ -205,7 +205,7 @@ class Database:
                 """
             )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_agent_tools_agent ON agent_tools (agent_ids)"
+                "CREATE INDEX IF NOT EXISTS idx_agent_tools_agent ON agent_tools (agent_id)"
             )
 
     def register_agent(self, agent_id: str, name: str) -> None:
@@ -232,7 +232,7 @@ class Database:
                 """
                 INSERT INTO agents (agent_id, name, updated_at)
                 VALUES (?, ?, ?)
-                ON CONFLICT(agent_ids) DO UPDATE SET
+                ON CONFLICT(agent_id) DO UPDATE SET
                     name = excluded.name,
                     updated_at = excluded.updated_at
                 """,

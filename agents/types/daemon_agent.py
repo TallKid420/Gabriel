@@ -25,12 +25,13 @@ class DaemonAgent(BaseAgent):
         )
 
         self.db = Database()
-        enabled_ids = self.db.get_enabled_tool_ids()
-        self._registry = load_tool_registry(enabled_ids=enabled_ids)
+        self._registry = load_tool_registry()
+        self.db.sync_agent_tools(self.agent_id, self._registry.tool_ids())
+        self._enabled_tool_ids = self.db.get_enabled_tool_ids(self.agent_id)
         self.agent = self._build_runtime()
 
     def get_tools(self) -> list[BaseTool]:
-        return self._registry.resolve_for_agent(self.tools)
+        return self._registry.resolve_enabled(self._enabled_tool_ids)
 
     def _build_runtime(self):
         
