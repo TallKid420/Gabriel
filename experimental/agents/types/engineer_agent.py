@@ -2,7 +2,6 @@ from langchain_core.tools import BaseTool
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langchain_core._api.beta_decorator import LangChainBetaWarning
-from langgraph.checkpoint.sqlite import SqliteSaver
 
 from executor.toolhandler import load_tool_registry
 from agents.base_agent import BaseAgent
@@ -44,14 +43,13 @@ class EngineerAgent(BaseAgent):
             max_tokens=int(self.max_tokens or 1024),
         )
 
-        memory = self.db.connect_sync()
         resolved = self.get_tools()
 
         return create_agent(
             model=self.llm,
             tools=resolved,
             system_prompt=self.system_prompt,
-            checkpointer=SqliteSaver(memory),
+            checkpointer=self.db.get_checkpointer(),
         )
     
     def run(self, user_input: str, thread_id: str) -> str:

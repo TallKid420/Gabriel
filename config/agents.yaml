@@ -1,20 +1,20 @@
 system_agents:
   agents:
-  - name: server
-    type: server
-    provider: ollama
-    model: gpt-oss:20b
-    enabled: true
-    endpoint: http://jcs-macbook-pro:11434
-    timeout_seconds: 20
-    temperature: 0.3
-    top_p: 0.95
-    max_tokens: 1024
-    context_window: 4096
-    tools: []
-    system_prompt: ''
-    agent_id: 4154aa68-691c-57c3-90cd-0783a73d6890
-    approval_required_for_unapproved: true
+  # - name: server
+  #   type: server
+  #   provider: ollama
+  #   model: gpt-oss:20b
+  #   enabled: true
+  #   endpoint: http://jcs-macbook-pro:11434
+  #   timeout_seconds: 20
+  #   temperature: 0.3
+  #   top_p: 0.95
+  #   max_tokens: 1024
+  #   context_window: 4096
+  #   tools: []
+  #   system_prompt: ''
+  #   agent_id: 4154aa68-691c-57c3-90cd-0783a73d6890
+  #   approval_required_for_unapproved: true
 custom_agents:
   agents:
   - name: hermes-chat
@@ -30,28 +30,28 @@ custom_agents:
     tools: []
     system_prompt: You are Hermes, a personal assistant.
     agent_id: f183409d-5940-57fd-bea6-9fdf21fb3a83
-  - name: researcher-daily
-    type: researcher
-    provider: ollama
-    model: gpt-oss:120b
-    enabled: true
-    endpoint: http://jcs-macbook-pro:11434
-    timeout_seconds: 20
-    temperature: 0.0
-    top_p: 1.0
-    system_prompt: ''
-    agent_id: d97e4798-ee6e-5c0a-99a8-762e667f065c
-    output_dir: /home/user/reports
-  - name: engineer-1
-    type: engineer
-    provider: ollama
-    model: gpt-oss:120b
-    enabled: true
-    endpoint: http://jcs-macbook-pro:11434
-    timeout_seconds: 20
-    temperature: 0.0
-    top_p: 1.0
-    max_tokens: 10000
-    tools: []
-    system_prompt: You are Hermes...
-    agent_id: b651b163-543a-52c7-bf1f-44b08452d82e
+  # - name: researcher-daily
+  #   type: researcher
+  #   provider: ollama
+  #   model: gpt-oss:120b
+  #   enabled: true
+  #   endpoint: http://jcs-macbook-pro:11434
+  #   timeout_seconds: 20
+  #   temperature: 0.0
+  #   top_p: 1.0
+  #   system_prompt: ''
+  #   agent_id: d97e4798-ee6e-5c0a-99a8-762e667f065c
+  #   output_dir: /home/user/reports
+  # - name: engineer-1
+  #   type: engineer
+  #   provider: ollama
+  #   model: gpt-oss:120b
+  #   enabled: true
+  #   endpoint: http://jcs-macbook-pro:11434
+  #   timeout_seconds: 20
+  #   temperature: 0.0
+  #   top_p: 1.0
+  #   max_tokens: 10000
+  #   tools: []
+  #   system_prompt: You are Hermes...
+  #   agent_id: b651b163-543a-52c7-bf1f-44b08452d82e

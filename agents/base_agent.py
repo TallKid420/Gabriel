@@ -5,10 +5,10 @@ from uuid import UUID
 
 AGENT_TYPE_MAP: dict[str, str] = {
     "chat": "ChatAgent",
-    "engineer": "EngineerAgent",
-    "researcher": "ResearcherAgent",
-    "server": "ServerAgent",
-    "daemon": "DaemonAgent",
+    # "engineer": "EngineerAgent",
+    # "researcher": "ResearcherAgent",
+    # "server": "ServerAgent",
+    # "daemon": "DaemonAgent",
 }
 
 @dataclass
@@ -62,22 +62,22 @@ class BaseAgent:
                 from agents.types.chat_agent import ChatAgent
 
                 return ChatAgent(**extracted, extra=extra)
-            if agent_type == "engineer":
-                from agents.types.engineer_agent import EngineerAgent
+            # if agent_type == "engineer":
+            #     from agents.types.engineer_agent import EngineerAgent
 
-                return EngineerAgent(**extracted, extra=extra)
-            if agent_type == "researcher":
-                from agents.types.researcher_agent import ResearcherAgent
+            #     return EngineerAgent(**extracted, extra=extra)
+            # if agent_type == "researcher":
+            #     from agents.types.researcher_agent import ResearcherAgent
 
-                return ResearcherAgent(**extracted, extra=extra)
-            if agent_type == "server":
-                from agents.server_agent import ServerAgent
+            #     return ResearcherAgent(**extracted, extra=extra)
+            # if agent_type == "server":
+            #     from agents.server_agent import ServerAgent
 
-                return ServerAgent(**extracted, extra=extra)
-            if agent_type == "daemon":
-                from agents.types.daemon_agent import DaemonAgent
+            #     return ServerAgent(**extracted, extra=extra)
+            # if agent_type == "daemon":
+            #     from agents.types.daemon_agent import DaemonAgent
 
-                return DaemonAgent(**extracted, extra=extra)
+            #     return DaemonAgent(**extracted, extra=extra)
 
         return cls(**extracted, extra=extra)
 

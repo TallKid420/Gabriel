@@ -8,21 +8,25 @@ truth for sessions, extracted out of the Streamlit entry point (``app.py``).
 The service is intentionally free of any Streamlit imports so it can run inside
 the FastAPI process (the system of record) while Streamlit talks to it over
 HTTP. ``ChatSession`` is re-exported by ``app.py`` for backwards compatibility
-during the migration.
+
+Persistence now lives in the unified PostgreSQL database via
+:class:'db.respositories.SessionRepository' (previously a '''sessions.json''' file).
 """
 
 from __future__ import annotations
 
-import json
-import threading
 import uuid
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-# Persist to the same file the legacy Streamlit app used so existing data and a
-# running Streamlit instance stay compatible during the migration.
+from db.repositories import SessionRepository
+
+# Retained only so legacy ''from api.services.session_service import SESSIONS_FILE'''
+# import keep resolving. Sessions are no longer stored in this file.
+# TODO: Remove this from other files
 SESSIONS_FILE = Path(__file__).resolve().parents[2] / "database" / "sessions.json"
 
 
@@ -61,97 +65,73 @@ class ChatSession:
 class SessionService:
     """CRUD + persistence for chat sessions, backed by a JSON file."""
 
-    def __init__(self, sessions_file: Path | str = SESSIONS_FILE) -> None:
-        self._file = Path(sessions_file)
-        self._lock = threading.RLock()
+    def __init__(self, sessions_file: Path | str | None = None) -> None:
+        if sessions_file is not None:
+            warnings.warn(
+                "sessions_file parameter is deprecated and will be removed in a future version",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self._repo = SessionRepository()
 
-    # -- persistence ---------------------------------------------------------
+    # -- persistence (legacy compat shims) -----------------------------------
     def _load_raw(self) -> dict[str, ChatSession]:
-        if not self._file.exists():
-            return {}
-        try:
-            data = json.loads(self._file.read_text(encoding="utf-8"))
-            return {
-                sid: ChatSession.from_dict(sdata) for sid, sdata in data.items()
-            }
-        except Exception:
-            return {}
+        return {
+            s["id"]: ChatSession.from_dict(s) for s in self._repo.list_sessions()
+        }
 
     def _save_raw(self, sessions: dict[str, ChatSession]) -> None:
-        self._file.parent.mkdir(parents=True, exist_ok=True)
-        data = {sid: s.to_dict() for sid, s in sessions.items()}
-        self._file.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        self._repo.replace_all([s.to_dict() for s in sessions.values()])
 
     # -- public API ----------------------------------------------------------
     def list_sessions(self) -> list[ChatSession]:
-        with self._lock:
-            return list(self._load_raw().values())
+        return [ChatSession.from_dict(s) for s in self._repo.list_sessions()]
 
     def get_session(self, session_id: str) -> Optional[ChatSession]:
-        with self._lock:
-            return self._load_raw().get(session_id)
+        data = self._repo.get_session(session_id)
+        return ChatSession.from_dict(data) if data is not None else None
 
     def create_session(
         self, agent_name: Optional[str] = None, title: Optional[str] = None
     ) -> ChatSession:
-        with self._lock:
-            sessions = self._load_raw()
-            session_id = str(uuid.uuid4())
-            session = ChatSession(
-                id=session_id,
-                title=title or (f"{agent_name} chat" if agent_name else "New chat"),
-                created_at=now_iso(),
-                agent_name=agent_name,
-                messages=[],
-            )
-            sessions[session_id] = session
-            self._save_raw(sessions)
-            return session
+        session_id = str(uuid.uuid4())
+        session = ChatSession(
+            id=session_id,
+            title=title or (f"{agent_name} chat" if agent_name else "New chat"),
+            created_at=now_iso(),
+            agent_name=agent_name,
+            messages=[],
+        )
+        self._repo.create_session(
+            session.id, session.title, session.created_at, session.agent_name
+        )
+        return session
 
     def delete_session(self, session_id: str) -> bool:
-        with self._lock:
-            sessions = self._load_raw()
-            if session_id not in sessions:
-                return False
-            del sessions[session_id]
-            self._save_raw(sessions)
-            return True
+        return self._repo.delete_session(session_id)
 
     def append_message(self, session_id: str, role: str, content: str) -> ChatSession:
-        with self._lock:
-            sessions = self._load_raw()
-            session = sessions.get(session_id)
-            if session is None:
-                raise KeyError(f"Session '{session_id}' not found")
-            session.messages.append({"role": role, "content": content})
-            self._maybe_update_title(session)
-            sessions[session_id] = session
-            self._save_raw(sessions)
-            return session
+        if not self._repo.exists(session_id):
+            raise KeyError(f"Session '{session_id}' not found")
+        self._repo.append_message(session_id, role, content)
+
+        # Re-derive the auto-title from the (now updated) message list.
+        session = self.get_session(session_id)
+        previous_title = session.title
+        self._maybe_update_title(session)
+        if session.title != previous_title:
+            self._repo.update_title(session_id, session.title)
+        return self.get_session(session_id)
 
     def set_agent(self, session_id: str, agent_name: str) -> ChatSession:
-        with self._lock:
-            sessions = self._load_raw()
-            session = sessions.get(session_id)
-            if session is None:
-                raise KeyError(f"Session '{session_id}' not found")
-            session.agent_name = agent_name
-            sessions[session_id] = session
-            self._save_raw(sessions)
-            return session
+        if not self._repo.set_agent(session_id, agent_name):
+            raise KeyError(f"Session '{session_id}' not found")
+        return self.get_session(session_id)
 
     def clear_messages(self, session_id: str) -> ChatSession:
-        with self._lock:
-            sessions = self._load_raw()
-            session = sessions.get(session_id)
-            if session is None:
-                raise KeyError(f"Session '{session_id}' not found")
-            session.messages = []
-            sessions[session_id] = session
-            self._save_raw(sessions)
-            return session
+        if not self._repo.clear_messages(session_id):
+            raise KeyError(f"Session '{session_id}' not found")
+        return self.get_session(session_id)
 
     @staticmethod
     def _maybe_update_title(session: ChatSession) -> None:

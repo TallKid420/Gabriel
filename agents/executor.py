@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from agents.base_agent import BaseAgent
 from agents.factory import AgentFactory
 from agents.types.chat_agent import ChatAgent
-from agents.types.daemon_agent import DaemonAgent
-from agents.types.engineer_agent import EngineerAgent
-from agents.types.researcher_agent import ResearcherAgent
-from agents.server_agent import ServerAgent
+# from agents.types.daemon_agent import DaemonAgent
+# from agents.types.engineer_agent import EngineerAgent
+# from agents.types.researcher_agent import ResearcherAgent
+# from agents.server_agent import ServerAgent
 from config.config_loader import AgentConfig
 
 
@@ -22,10 +22,10 @@ class AgentExecutionResult:
 class AgentExecutor:
     TYPE_CONTRACTS: tuple[tuple[type[BaseAgent], str], ...] = (
         (ChatAgent, "chat"),
-        (EngineerAgent, "engineer"),
-        (ResearcherAgent, "researcher"),
-        (ServerAgent, "server"),
-        (DaemonAgent, "daemon"),
+        # (EngineerAgent, "engineer"),
+        # (ResearcherAgent, "researcher"),
+        # (ServerAgent, "server"),
+        # (DaemonAgent, "daemon"),
     )
 
     def __init__(self) -> None:

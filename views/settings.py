@@ -174,49 +174,51 @@ def settings_ui():
     # ==========================================
     with tabs[2]:
         st.header("Database Settings")
-        st.info("Configure database connections for memory and state management.")
-
-        db_type = st.selectbox(
-            "Database Type",
-            options=["SQLite (Default)", "PostgreSQL", "MySQL"],
-            help="Choose your database backend"
+        st.info(
+            "Gabriel stores **all** state — sessions, chat history, agents, tool "
+            "state, the crawler link queue, LangGraph checkpoints, and vector "
+            "memory — in a single self-hosted **PostgreSQL + pgvector** database."
         )
 
-        if db_type == "SQLite (Default)":
-            db_path = st.text_input(
-                "Database Path",
-                value="./database/",
-                help="Path to SQLite database directory"
-            )
-            st.caption("📝 SQLite is suitable for single-user deployments")
+        import os
 
-        elif db_type == "PostgreSQL":
-            col1, col2 = st.columns(2)
-            with col1:
-                pg_host = st.text_input("Host", value="localhost")
-                pg_user = st.text_input("User", value="postgres")
-            with col2:
-                pg_port = st.number_input("Port", value=5432, min_value=1, max_value=65535)
-                pg_password = st.text_input("Password", type="password")
+        database_url = os.getenv(
+            "DATABASE_URL", "postgresql://gabriel:gabriel@localhost:5432/gabriel"
+        )
+        embedding_dim = os.getenv("EMBEDDING_DIM", "1024")
 
-            pg_database = st.text_input("Database", value="gabriel")
+        st.text_input(
+            "DATABASE_URL",
+            value=database_url,
+            disabled=True,
+            help="Connection string read from the DATABASE_URL environment variable "
+            "(set it in your .env file).",
+        )
+        st.text_input(
+            "Embedding dimensions",
+            value=str(embedding_dim),
+            disabled=True,
+            help="Vector size for the pgvector `documents.embedding` column "
+            "(EMBEDDING_DIM). Must match your embedding model — bge-m3 = 1024.",
+        )
 
-            if st.button("Test Connection", use_container_width=True):
-                st.info("Connection test not yet implemented")
+        st.caption(
+            "📝 To change the backend, edit `DATABASE_URL` in your `.env` file and "
+            "run the schema migration with `python -m db.migrate`. "
+            "See `POSTGRES_SETUP.md` for full installation and setup instructions."
+        )
 
-        elif db_type == "MySQL":
-            col1, col2 = st.columns(2)
-            with col1:
-                mysql_host = st.text_input("Host", value="localhost")
-                mysql_user = st.text_input("User", value="root")
-            with col2:
-                mysql_port = st.number_input("Port", value=3306, min_value=1, max_value=65535)
-                mysql_password = st.text_input("Password", type="password")
+        if st.button("Test Connection", use_container_width=True):
+            try:
+                from db import get_pool
 
-            mysql_database = st.text_input("Database", value="gabriel")
-
-            if st.button("Test Connection", use_container_width=True):
-                st.info("Connection test not yet implemented")
+                with get_pool().connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT 1")
+                        cur.fetchone()
+                st.success("✅ Connected to PostgreSQL successfully")
+            except Exception as exc:  # pragma: no cover - UI feedback only
+                st.error(f"❌ Connection failed: {exc}")
 
     # ==========================================
     # Tab 4: Preferences

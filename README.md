@@ -10,10 +10,19 @@ and an optional daemon/server control page.
 > (architecture assessment, migration plan, backend design, phased rollout, validation,
 > and tech debt).
 
+> **Storage (after unification):** All persistent state — chat sessions and history,
+> agents, per-agent tool state, the crawler link queue, LangGraph checkpoints, and the
+> vector knowledge base — lives in a **single self-hosted PostgreSQL database with the
+> [pgvector](https://github.com/pgvector/pgvector) extension**. The previous mix of
+> ChromaDB, multiple SQLite databases, and a `sessions.json` file has been removed.
+> See **[`POSTGRES_SETUP.md`](POSTGRES_SETUP.md)** for installation, schema migration, and
+> the required environment variables (e.g. `DATABASE_URL`). Ollama is still used as an
+> external embedding/LLM service — it is **not** a storage backend.
+
 ## What it does
 
 - Provides a chat interface powered by configurable agents defined in `config/agents.yaml`
-- Saves chat sessions in `database/sessions.json`
+- Stores chat sessions, history, agents, tools, the crawler queue, and vector memory in PostgreSQL + pgvector
 - Supports multiple sessions and agent selection
 - Includes a server view for starting/stopping a backend daemon
 - Uses the `agents`, `config`, and `executor` packages to create and manage agent workflows
@@ -32,9 +41,9 @@ and an optional daemon/server control page.
 - `views/` - Pages for chat, server status, sessions, settings (presentation only)
 - `config/` - Agent config loader and manager (unchanged core)
 - `agents/` - Agent definitions, factory, and executor logic (unchanged core)
-- `daemon/` - Daemon process and database support (unchanged core)
+- `daemon/` - Daemon process and the thin `daemon/database.py` facade over the `db` package
+- `db/` - **Unified PostgreSQL + pgvector layer**: connection pool, schema, migration runner, LangGraph checkpointer, and repositories (sessions, agents, links, vectors)
 - `executor/` - Tool handling and provider integrations (unchanged core)
-- `database/` - Persistent session storage and checkpoints
 - `docs/` - Migration documentation (assessment, plan, backend design, sequence, validation, tech debt)
 
 ## Setup
@@ -56,6 +65,17 @@ venv\Scripts\Activate.ps1
 ```powershell
 pip install -r requirements.txt
 ```
+
+4. Set up PostgreSQL + pgvector and the database schema:
+
+   Follow **[`POSTGRES_SETUP.md`](POSTGRES_SETUP.md)** to install PostgreSQL with the
+   pgvector extension, create the database/role, and configure your environment. Then copy
+   `.env.example` to `.env`, adjust `DATABASE_URL` if needed, and run the schema migration:
+
+   ```bash
+   cp .env.example .env
+   python -m db.migrate
+   ```
 
 ## Run
 
@@ -94,6 +114,6 @@ the UI shows a warning banner.
 
 ## Notes
 
-- Saved sessions are stored in `database/sessions.json`
+- All state (sessions, history, agents, tools, crawler queue, checkpoints, and vector memory) is stored in PostgreSQL + pgvector — see [`POSTGRES_SETUP.md`](POSTGRES_SETUP.md)
 - The app uses `agents.executor.AgentExecutor` to run agent conversations and stream responses
 - The chat UI supports formatted JSON and tool output display

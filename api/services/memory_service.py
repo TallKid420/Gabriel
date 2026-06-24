@@ -4,52 +4,52 @@ MemoryService
 
 Owns the vector-store knowledge base. Extracted out of ``views/memory.py`` so
 the UI no longer instantiates ``VectorDatabase`` or reaches into the underlying
-Chroma collection directly.
+verctor collection directly.
 
-``VectorDatabase`` pulls in Ollama embeddings + Chroma, so it is imported and
-constructed lazily.
+Storage is backed by the unified PostgreSQL + pgvector database (see the
+''db'' package). ``VectorDatabase`` pulls in Ollama embeddings, so it is 
+imported and constructed lazily.
 """
 
 from __future__ import annotations
-
-from typing import Any, Optional
+from typing import Any
+import warnings
 
 
 class MemoryService:
-    def __init__(self, chroma_db_path: str = "./database/") -> None:
-        self._chroma_db_path = chroma_db_path
+    def __init__(self, chroma_db_path: str | None = None) -> None:
         self._vdb = None
+        if chroma_db_path is not None:
+            warnings.warn(
+                "chroma_db_path parameter is deprecated and will be removed in a future version",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
     @property
     def vdb(self):
         if self._vdb is None:
             from daemon.database import VectorDatabase
 
-            self._vdb = VectorDatabase(chroma_db_path=self._chroma_db_path)
+            self._vdb = VectorDatabase()
         return self._vdb
-
-    @property
-    def _collection(self):
-        return self.vdb.vectorstore._collection
 
     # -- reads ---------------------------------------------------------------
     def count(self) -> int:
-        return self._collection.count()
+        return self.vdb.count()
 
     def list_memories(self) -> dict[str, list[dict[str, Any]]]:
         """Return stored chunks grouped by source URL."""
-        collection = self._collection
-        if collection.count() == 0:
-            return {}
-        results = collection.get(include=["documents", "metadatas"])
         grouped: dict[str, list[dict[str, Any]]] = {}
-        if results and results.get("ids"):
-            for doc_id, metadata, document in zip(
-                results["ids"], results["metadatas"], results["documents"]
-            ):
+        for row in self.vdb.list_documents():
+                metadata = row.get("metadata") or {}
                 source = metadata.get("url", metadata.get("source", "Unknown"))
                 grouped.setdefault(source, []).append(
-                    {"id": doc_id, "content": document, "metadata": metadata}
+                    {
+                        "id": row.get("id"), 
+                        "content": row.get("content"), 
+                        "metadata": metadata,
+                    }
                 )
         return grouped
 
@@ -62,7 +62,7 @@ class MemoryService:
 
     # -- writes --------------------------------------------------------------
     def delete(self, doc_ids: list[str]) -> None:
-        self._collection.delete(ids=doc_ids)
+        self.vdb.delete(ids=doc_ids)
 
     async def add_document(self, url: str, markdown: str) -> None:
         await self.vdb.process_and_store_document(url, markdown)
