@@ -1,6 +1,14 @@
 # Gabriel
 
-Gabriel is a Streamlit-based AI agent chat application with session management, configurable agents, and an optional daemon/server control page.
+Gabriel is an AI agent chat application with session management, configurable agents,
+and an optional daemon/server control page.
+
+> **Architecture (after backend extraction):** Gabriel now runs as **two processes** — a
+> **FastAPI backend** (`api/`) that owns all agent, tool, memory, session, and
+> orchestration logic, and a **thin Streamlit UI** (`app.py`, `views/`) that talks to the
+> backend over REST + WebSocket/SSE. See [`docs/`](docs/) for the full migration write-up
+> (architecture assessment, migration plan, backend design, phased rollout, validation,
+> and tech debt).
 
 ## What it does
 
@@ -12,13 +20,22 @@ Gabriel is a Streamlit-based AI agent chat application with session management, 
 
 ## Project structure
 
-- `app.py` - Main Streamlit app entrypoint
-- `views/` - Pages for chat, server status, sessions, and settings
-- `config/` - Agent config loader and manager
-- `agents/` - Agent definitions, factory, and executor logic
-- `daemon/` - Daemon process and database support
-- `executor/` - Tool handling and provider integrations
+- `api/` - **FastAPI backend** (system of record)
+  - `api/app.py` - FastAPI app, CORS, `/health`, router wiring
+  - `api/routes/` - REST endpoints (agents, chat, sessions, tools, memory)
+  - `api/services/` - service layer wrapping the unchanged core (agent, tool, session, memory, config)
+  - `api/websocket.py` - `/ws/chat` streaming handler
+  - `api/schemas.py` - Pydantic request/response models
+  - `api/dependencies.py` - DI providers (service singletons)
+  - `api/client.py` - `GabrielAPIClient` used by the Streamlit UI
+- `app.py` - Streamlit UI entrypoint (thin presentation client)
+- `views/` - Pages for chat, server status, sessions, settings (presentation only)
+- `config/` - Agent config loader and manager (unchanged core)
+- `agents/` - Agent definitions, factory, and executor logic (unchanged core)
+- `daemon/` - Daemon process and database support (unchanged core)
+- `executor/` - Tool handling and provider integrations (unchanged core)
 - `database/` - Persistent session storage and checkpoints
+- `docs/` - Migration documentation (assessment, plan, backend design, sequence, validation, tech debt)
 
 ## Setup
 
@@ -42,13 +59,26 @@ pip install -r requirements.txt
 
 ## Run
 
-Start the Streamlit app:
+Gabriel now runs as two processes. Start the backend first, then the UI.
 
-```powershell
+**1. Start the FastAPI backend:**
+
+```bash
+uvicorn api.app:app --host 0.0.0.0 --port 8000
+```
+
+- OpenAPI docs: `http://127.0.0.1:8000/docs`
+- Health probe: `http://127.0.0.1:8000/health`
+
+**2. Start the Streamlit UI** (point it at the backend):
+
+```bash
+export GABRIEL_API_URL=http://127.0.0.1:8000   # default if unset
 streamlit run app.py
 ```
 
-Then open the local Streamlit URL shown in the terminal.
+Then open the local Streamlit URL shown in the terminal. If the backend is unreachable,
+the UI shows a warning banner.
 
 ## Configuration
 

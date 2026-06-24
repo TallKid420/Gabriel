@@ -62,7 +62,7 @@ class EngineerAgent(BaseAgent):
         return response["messages"][-1].content
 
     def run_stream(self, user_input: str, thread_id: str):
-        stream = self.agent.stream_events(
+        stream = self.agent.stream(
             {"messages": [{"role": "user", "content": user_input}]},
             config={"configurable": {"thread_id": thread_id}},
             stream_mode="messages",

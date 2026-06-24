@@ -1,20 +1,16 @@
-import streamlit as st
-from daemon.database import Database
 import logging
 
+import streamlit as st
+
+from app import get_api
+
 log = logging.getLogger(__name__)
-
-
-@st.cache_resource
-def get_database():
-    """Cache the database connection across page loads."""
-    return Database()
 
 
 def settings_ui():
     st.title("⚙️ Settings")
 
-    config_manager = st.session_state.config_manager
+    api = get_api()
     daemon = st.session_state.daemon
 
     tabs = st.tabs([
@@ -31,38 +27,44 @@ def settings_ui():
         st.header("Agent Control")
         st.write("Enable or disable agents globally.")
 
-        all_agents = config_manager.system_agents + config_manager.custom_agents
+        try:
+            all_agents = api.list_agents()
+        except Exception as e:
+            st.error(f"Could not load agents from backend: {e}")
+            all_agents = []
 
         if not all_agents:
             st.warning("No agents found in configuration.")
         else:
-            agent_types = sorted(list(set(agent.type for agent in all_agents)))
+            agent_types = sorted({a["type"] for a in all_agents})
 
             for agent_type in agent_types:
                 with st.expander(f"📁 {agent_type.upper()}", expanded=True):
-                    agents_of_type = [a for a in all_agents if a.type == agent_type]
+                    agents_of_type = [a for a in all_agents if a["type"] == agent_type]
 
                     for agent in agents_of_type:
                         col1, col2 = st.columns([4, 1])
 
                         with col1:
-                            status_emoji = "✅" if agent.enabled else "⚪"
-                            st.markdown(f"**{status_emoji} {agent.name}**")
-                            st.caption(f"Model: `{agent.model}` | Provider: `{agent.provider}`")
+                            status_emoji = "✅" if agent["enabled"] else "⚪"
+                            st.markdown(f"**{status_emoji} {agent['name']}**")
+                            st.caption(
+                                f"Model: `{agent['model']}` | Provider: `{agent['provider']}`"
+                            )
 
                         with col2:
-                            current_enabled = agent.enabled
+                            current_enabled = agent["enabled"]
                             new_enabled = st.toggle(
                                 "Enabled",
                                 value=current_enabled,
-                                key=f"agent_toggle_{agent.name}"
+                                key=f"agent_toggle_{agent['name']}",
                             )
 
                             if new_enabled != current_enabled:
                                 if new_enabled:
-                                    config_manager.enable_agent(agent.name)
+                                    api.enable_agent(agent["name"])
                                 else:
-                                    config_manager.disable_agent(agent.name)
+                                    api.disable_agent(agent["name"])
                                 st.rerun()
 
     # ==========================================

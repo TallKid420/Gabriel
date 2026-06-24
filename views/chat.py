@@ -1,8 +1,16 @@
-from app import ChatSession, save_sessions
-from views.sessions import SessionManager
+"""Chat page — presentation only.
+
+This view no longer imports agents, executors or the session store. It renders
+chat history fetched from the backend and streams replies from the API's SSE
+endpoint, rendering the *normalized* event contract produced by ``AgentService``.
+"""
 
 import json
+
 import streamlit as st
+
+from app import get_api
+from views.sessions import SessionManager
 
 
 def format_response(content: str) -> str:
@@ -13,91 +21,69 @@ def format_response(content: str) -> str:
         try:
             parsed = json.loads(text)
             pretty = json.dumps(parsed, indent=2, ensure_ascii=False)
-            return f"json\n{pretty}\n"
+            return f"```json\n{pretty}\n```"
         except Exception:
             return text
     return text
 
 
-def render_streamed_reply(stream) -> str:
-
+def render_event_stream(stream) -> str:
+    """Render the normalized event stream coming from the backend API."""
     tools_container = st.container()
     text_container = st.empty()
-    
     rendered_text = ""
+    tool_expanders: dict[str, object] = {}
 
-    tool_expanders = {}
-
-    for chunk in stream:
+    for event in stream:
         try:
-            match chunk["type"]:
-                case "messages":
-                    token, metadata = chunk["data"]
-                    text = ""  # ← initialize FIRST
-                    if isinstance(token.content, str):
-                        text = token.content
-                    elif isinstance(token.content, list) and token.content:
-                        text = token.content[0].get("text", "")
-                    if text:
-                        rendered_text += text
-                        text_container.markdown(rendered_text)
-
-                case "tool_start":
-                    tool_name = chunk.get("name", "unknown")
-                    tool_input = chunk.get("input", {})
-                    expander = None
-
-                    with tools_container:
-                        expander = st.expander(f"Tool: {tool_name}", expanded=True)
-                        expander.write(f"**Input:**\n```json\n{tool_input}\n```")
-                    tool_expanders[tool_name] = expander
-
-                case "tool_output":
-                    tool_name = chunk.get("name", "unknown")
-                    content = chunk.get("content", "")
-                    expander = tool_expanders.get(tool_name)
-                    if expander:
-                        expander.write(
-                            f"**Intermediate output:**\n```text\n{content}\n```"
-                        )
-
-                case "tool_end":
-                    tool_name = chunk.get("name", "unknown")
-                    raw_output = chunk.get("output")
-                    output = ""
-
-                    if raw_output is not None:
-                        output = getattr(raw_output, "content", None) or str(raw_output)
-
-                    expander = tool_expanders.get(tool_name)
-                    if expander:
-                        expander.write(
-                            f"**Output:**\n```text\n{output}\n```"
-                        )
-        except Exception as e:
-            st.error(f"Error rendering chunk: {e}")
+            etype = event.get("type")
+            if etype == "token":
+                rendered_text += event.get("content", "")
+                text_container.markdown(rendered_text)
+            elif etype == "tool_start":
+                name = event.get("name", "unknown")
+                with tools_container:
+                    expander = st.expander(f"Tool: {name}", expanded=True)
+                    expander.write(f"**Input:**\n```json\n{event.get('input', {})}\n```")
+                tool_expanders[name] = expander
+            elif etype == "tool_output":
+                expander = tool_expanders.get(event.get("name", "unknown"))
+                if expander:
+                    expander.write(
+                        f"**Intermediate output:**\n```text\n{event.get('content', '')}\n```"
+                    )
+            elif etype == "tool_end":
+                expander = tool_expanders.get(event.get("name", "unknown"))
+                if expander:
+                    expander.write(f"**Output:**\n```text\n{event.get('output', '')}\n```")
+            elif etype == "error":
+                st.error(event.get("message", "Unknown error"))
+            elif etype == "done":
+                if event.get("content"):
+                    rendered_text = event["content"]
+                    text_container.markdown(rendered_text)
+        except Exception as e:  # defensive: never let one event crash the page
+            st.error(f"Error rendering event: {e}")
             continue
 
     return rendered_text
 
 
-def maybe_update_title(session: ChatSession) -> None:
-    if session.title == "New chat":
-        user_messages = [m["content"] for m in session.messages if m["role"] == "user"]
-        if user_messages:
-            session.title = user_messages[0][:48] or "New chat"
-
-def current_session() -> ChatSession:
-    return st.session_state.sessions[st.session_state.active_session_id]
-
-def clear_active_session() -> None:
-    session = current_session()
-    session.messages = []
-
 def chat_ui() -> None:
-    session = current_session()
+    api = get_api()
+    session_id = st.session_state.get("active_session_id")
+    if not session_id:
+        st.info("No active session. Create one from the Sessions page.")
+        return
 
-    agent_info = f" · Agent: {session.agent_name}" if session.agent_name else ""
+    try:
+        session = api.get_session(session_id)
+    except Exception as e:
+        st.error(f"Could not load session from backend: {e}")
+        return
+
+    agent_name = session.get("agent_name")
+    agent_info = f" · Agent: {agent_name}" if agent_name else ""
     left, right = st.columns([10, 1])
 
     with left:
@@ -105,71 +91,56 @@ def chat_ui() -> None:
             f"""
             <div style="display:flex; align-items:center; justify-content:flex-start; gap:1rem; padding:0.75rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.12); margin-bottom:1rem;">
                 <div style="font-size:1.5rem; font-weight:700; margin:0;">Chat</div>
-                <div style="font-size:1rem; color:#5f6368; margin:0;">Session: {session.title}{agent_info}</div>
+                <div style="font-size:1rem; color:#5f6368; margin:0;">Session: {session.get('title', '')}{agent_info}</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
     with right:
-        if st.button(
-            "+",
-            key="new_chat_button",
-            help="New Chat (Ctrl + N)",
-            use_container_width=True,
-        ):
+        if st.button("+", key="new_chat_button", help="New Chat", use_container_width=True):
             SessionManager.create_session()
-            st.experimental_rerun()
+            st.rerun()
+        if st.button("Clear", key="clear_chat_button", help="Clear Chat", use_container_width=True):
+            api.clear_session(session_id)
+            st.rerun()
 
-        if st.button(
-            "Clear",
-            key="clear_chat_button",
-            help="Clear Chat",
-            use_container_width=True,
-        ):
-            clear_active_session()
-
-    for msg in session.messages:
+    for msg in session.get("messages", []):
         with st.chat_message(msg["role"]):
             st.markdown(format_response(msg["content"]))
 
-    prompt = st.chat_input(
-        placeholder="Message",
-        accept_file=False,
-        accept_audio=False,
-    )
+    prompt = st.chat_input(placeholder="Message", accept_file=False, accept_audio=False)
     if not prompt:
         return
 
-    enabled_agents = st.session_state.config_manager.get_enabled_agents()
-    selected_agent_name = session.agent_name or st.session_state.last_manual_agent_name
-    selected_agent = next((a for a in enabled_agents if a.name == selected_agent_name), None)
-    if selected_agent is None:
-        chat_agents = [a for a in enabled_agents if a.type == "chat"]
-        selected_agent = chat_agents[0] if chat_agents else (enabled_agents[0] if enabled_agents else None)
-        if selected_agent is None:
+    # Resolve the agent for this turn from the backend's enabled agents.
+    selected_agent_name = agent_name or st.session_state.get("last_manual_agent_name")
+    if not selected_agent_name:
+        try:
+            enabled = api.list_agents(enabled_only=True)
+        except Exception:
+            enabled = []
+        if not enabled:
             st.error("No enabled agents available for chat")
             return
-        session.agent_name = selected_agent.name
-
-    session.messages.append({"role": "user", "content": prompt})
-    maybe_update_title(session)
-    save_sessions(st.session_state.sessions)
+        chat_agents = [a for a in enabled if a["type"] == "chat"]
+        selected_agent_name = (chat_agents or enabled)[0]["name"]
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            stream = st.session_state.agent_executor.execute_stream(
-                agent=selected_agent,
-                messages=session.messages,
-                thread_id=session.id,
-            )
-            reply = render_streamed_reply(stream)
+            try:
+                stream = api.chat_stream(session_id, prompt, selected_agent_name)
+                render_event_stream(stream)
+            except Exception as e:
+                st.error(f"Backend chat error: {e}")
+                return
 
-    session.messages.append({"role": "assistant", "content": reply})
-    save_sessions(st.session_state.sessions)
+    # The backend persists both the user and assistant messages, so just rerun
+    # to show the canonical history.
+    st.rerun()
 
 
 if __name__ == "__main__":
