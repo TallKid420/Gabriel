@@ -4,8 +4,8 @@ from langchain.agents import create_agent
 from langchain_core._api.beta_decorator import LangChainBetaWarning
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from agents.base_agent import BaseAgent
 from executor.toolhandler import load_tool_registry
+from agents.base_agent import BaseAgent
 from daemon.database import Database
 
 import warnings
@@ -34,7 +34,6 @@ class ChatAgent(BaseAgent):
         return self._registry.resolve_enabled(self._enabled_tool_ids)
 
     def _build_runtime(self):
-        
         # Build Agent Config
 
         self.llm = ChatOllama(
@@ -47,6 +46,7 @@ class ChatAgent(BaseAgent):
 
         memory = self.db.connect_sync()
         resolved = self.get_tools()
+
         return create_agent(
             model=self.llm,
             tools=resolved,
@@ -62,7 +62,7 @@ class ChatAgent(BaseAgent):
         return response["messages"][-1].content
 
     def run_stream(self, user_input: str, thread_id: str):
-        stream = self.agent.stream(
+        stream = self.agent.stream_events(
             {"messages": [{"role": "user", "content": user_input}]},
             config={"configurable": {"thread_id": thread_id}},
             stream_mode="messages",

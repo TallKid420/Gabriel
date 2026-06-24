@@ -4,15 +4,14 @@ from langchain.agents import create_agent
 from langchain_core._api.beta_decorator import LangChainBetaWarning
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from agents.base_agent import BaseAgent
 from executor.toolhandler import load_tool_registry
+from agents.base_agent import BaseAgent
 from daemon.database import Database
 
 import warnings
 import logging
 
 log = logging.getLogger(__name__)
-
 
 class ResearcherAgent(BaseAgent):
     def validate(self) -> None:
@@ -35,7 +34,6 @@ class ResearcherAgent(BaseAgent):
         return self._registry.resolve_enabled(self._enabled_tool_ids)
 
     def _build_runtime(self):
-        
         # Build Agent Config
 
         self.llm = ChatOllama(
@@ -46,11 +44,12 @@ class ResearcherAgent(BaseAgent):
             max_tokens=int(self.max_tokens or 1024),
         )
 
-        memory = Database().connect_sync()
+        memory = self.db.connect_sync()
+        resolved = self.get_tools()
 
         return create_agent(
             model=self.llm,
-            tools=self.get_tools(),
+            tools=resolved,
             system_prompt=self.system_prompt,
             checkpointer=SqliteSaver(memory),
         )
@@ -63,45 +62,10 @@ class ResearcherAgent(BaseAgent):
         return response["messages"][-1].content
 
     def run_stream(self, user_input: str, thread_id: str):
-
         stream = self.agent.stream_events(
             {"messages": [{"role": "user", "content": user_input}]},
             config={"configurable": {"thread_id": thread_id}},
-            version="v3",
+            stream_mode="messages",
+            version="v2",
         )
-
-        tool_end = False
-        for name, item in stream.interleave("messages", "tool_calls"):
-
-            if name == "messages":
-                if tool_end:
-                    tool_end = False
-                    continue
-                for delta in item.text:
-                    yield {
-                        "type": "text",
-                        "content": delta,
-                    }
-
-            elif name == "tool_calls":
-
-                yield {
-                    "type": "tool_start",
-                    "name": item.tool_name,
-                    "input": item.input,
-                }
-
-                for delta in item.output_deltas:
-                    yield {
-                        "type": "tool_output",
-                        "name": item.tool_name,
-                        "content": delta,
-                    }
-
-                tool_end = True
-                yield {
-                    "type": "tool_end",
-                    "name": item.tool_name,
-                    "output": item.output,
-                    "error": item.error,
-                }
+        yield from stream
