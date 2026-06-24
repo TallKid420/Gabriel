@@ -1,0 +1,9 @@
+class MemoryService:
+    def load():
+        ...
+
+    def save():
+        ...
+
+    def summarize():
+        ...
