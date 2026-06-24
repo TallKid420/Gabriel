@@ -1,0 +1,28 @@
+tools:
+  files:
+    root_dirs:
+      - "~/Documents"
+      - "~/Clinic/docs"
+    allowed_extensions:
+      - ".txt"
+      - ".md"
+      - ".pdf"
+      - ".docx"
+    max_search_results: 100
+
+  email:
+    provider: imap
+    imap_host: "imap.example.com"
+    imap_port: 993
+    smtp_host: "smtp.example.com"
+    smtp_port: 465
+    username: "user@example.com"
+    password: "secret"
+    default_folder: "INBOX"
+    use_ssl: true
+
+  calendar:
+    provider: ics
+    ics_path: "~/Clinic/calendar.ics"
+    timezone: "America/Los_Angeles"
+    default_calendar_id: "primary"

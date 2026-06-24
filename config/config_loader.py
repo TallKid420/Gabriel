@@ -71,6 +71,43 @@ class CrawlerConfig:
     # If false, the daemon stops when the UI stops.
     keep_alive_on_ui_exit: bool = False
 
+@dataclass
+class FileToolConfig:
+    root_dirs: list[str] = field(default_factory=lambda: ["~/Documents", "."])
+    allowed_extensions: list[str] = field(default_factory=lambda: [".txt", ".md", ".pdf", ".docx"])
+    max_search_results: int = 100
+    enabled: bool = True
+
+
+@dataclass
+class EmailToolConfig:
+    provider: str = "imap"
+    imap_host: str = ""
+    imap_port: int = 993
+    smtp_host: str = ""
+    smtp_port: int = 465
+    username: str = ""
+    password: str = ""
+    default_folder: str = "INBOX"
+    use_ssl: bool = True
+    enabled: bool = True
+
+
+@dataclass
+class CalendarToolConfig:
+    provider: str = "ics"
+    ics_path: str = ""
+    timezone: str = "America/Los_Angeles"
+    default_calendar_id: str = "primary"
+    enabled: bool = True
+
+
+@dataclass
+class ToolConfig:
+    files: FileToolConfig = field(default_factory=FileToolConfig)
+    email: EmailToolConfig = field(default_factory=EmailToolConfig)
+    calendar: CalendarToolConfig = field(default_factory=CalendarToolConfig)
+
 
 def load(path: str | Path) -> dict[str, Any]:
     config_path = Path(path)
@@ -162,3 +199,62 @@ def load_custom_agents(path: str | Path) -> list[AgentConfig]:
     raw = load(path)
     entries = _extract_entries(raw, "custom_agents")
     return [_agent_from_dict(entry) for entry in entries if entry.get("enabled", True)]
+
+
+def load_tool_config(path: str | Path = "config/tool_config.yaml") -> ToolConfig:
+    """Load tool configuration from YAML file."""
+    raw = load(path)
+    tools_section = raw.get("tools", {})
+    
+    files_data = tools_section.get("files", {})
+    email_data = tools_section.get("email", {})
+    calendar_data = tools_section.get("calendar", {})
+    
+    files_config = FileToolConfig(
+        root_dirs=files_data.get("root_dirs", ["~/Documents", "."]),
+        allowed_extensions=files_data.get("allowed_extensions", [".txt", ".md", ".pdf"]),
+        max_search_results=int(files_data.get("max_search_results", 100)),
+        enabled=bool(files_data.get("enabled", True)),
+    )
+    
+    email_config = EmailToolConfig(
+        provider=str(email_data.get("provider", "imap")),
+        imap_host=str(email_data.get("imap_host", "")),
+        imap_port=int(email_data.get("imap_port", 993)),
+        smtp_host=str(email_data.get("smtp_host", "")),
+        smtp_port=int(email_data.get("smtp_port", 465)),
+        username=str(email_data.get("username", "")),
+        password=str(email_data.get("password", "")),
+        default_folder=str(email_data.get("default_folder", "INBOX")),
+        use_ssl=bool(email_data.get("use_ssl", True)),
+        enabled=bool(email_data.get("enabled", True)),
+    )
+    
+    calendar_config = CalendarToolConfig(
+        provider=str(calendar_data.get("provider", "ics")),
+        ics_path=str(calendar_data.get("ics_path", "")),
+        timezone=str(calendar_data.get("timezone", "America/Los_Angeles")),
+        default_calendar_id=str(calendar_data.get("default_calendar_id", "primary")),
+        enabled=bool(calendar_data.get("enabled", True)),
+    )
+    
+    return ToolConfig(files=files_config, email=email_config, calendar=calendar_config)
+
+
+def load_file_tool_config(
+    path: str | Path = "config/tool_config.yaml"
+) -> FileToolConfig:
+
+    return load_tool_config(path).files
+
+def load_email_tool_config(
+    path: str | Path = "config/tool_config.yaml"
+) -> EmailToolConfig:
+
+    return load_tool_config(path).email
+
+def load_calendar_tool_config(
+    path: str | Path = "config/tool_config.yaml"
+) -> CalendarToolConfig:
+
+    return load_tool_config(path).calendar

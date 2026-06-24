@@ -1,3 +1,6 @@
 {
-    "python-envs.defaultEnvManager": "ms-python.python:venv"
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "ollama.endpoint": "http://jcs-macbook-pro:11434",
+    "ollama-copilot.baseUrl": "http://jcs-macbook-pro:11434",
+    "snyk.advanced.autoSelectOrganization": true
 }

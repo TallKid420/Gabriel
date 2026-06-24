@@ -210,7 +210,6 @@ class ConfigManager:
             "top_p": agent.top_p,
             "max_tokens": agent.max_tokens,
             "context_window": agent.context_window,
-            "tools": agent.tools,
             "system_prompt": agent.system_prompt,
             **agent.extra,
         }
