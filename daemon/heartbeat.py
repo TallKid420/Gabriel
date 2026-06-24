@@ -83,7 +83,7 @@ async def _crawl_loop(queue: Any, config: CrawlerConfig, stop: asyncio.Event) ->
     Ticks are non-overlapping: if a tick takes longer than the interval,
     the next tick starts immediately after (no backlog of queued ticks).
     """
-    from daemon.url_parser.crawler import crawl_heartbeat
+    from experimental.crawler.crawler import crawl_heartbeat
 
     logger.info("[crawl-loop] Starting — interval=%ss", config.crawl_interval_sec)
 

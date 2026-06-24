@@ -30,7 +30,7 @@ class ProcessedChunk:
 class VectorDatabase:
     def __init__(
         self,
-        base_url: str = "http://jcs-macbook-pro:11434",
+        base_url: str = "http://localhost:11434",
         embedding_model: str = "bge-m3",
         chroma_db_path: str = "./database/",
     ):
