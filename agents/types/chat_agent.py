@@ -6,6 +6,7 @@ from langchain_core._api.beta_decorator import LangChainBetaWarning
 from executor.toolhandler import load_tool_registry
 from agents.base_agent import BaseAgent
 from daemon.database import Database
+from security.middleware import wrap_tools
 
 import warnings
 import logging
@@ -33,8 +34,6 @@ class ChatAgent(BaseAgent):
         return self._registry.resolve_enabled(self._enabled_tool_ids)
 
     def _build_runtime(self):
-        # Build Agent Config
-
         self.llm = ChatOllama(
             model=self.model,
             base_url=self.endpoint,
@@ -43,7 +42,7 @@ class ChatAgent(BaseAgent):
             max_tokens=int(self.max_tokens or 1024),
         )
 
-        resolved = self.get_tools()
+        resolved = wrap_tools(self.get_tools())
 
         return create_agent(
             model=self.llm,

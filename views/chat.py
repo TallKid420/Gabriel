@@ -28,7 +28,8 @@ def format_response(content: str) -> str:
 
 
 def render_event_stream(stream) -> str:
-    """Render the normalized event stream coming from the backend API."""
+    """Render the normalized event stream, including permission dialogs."""
+    api = get_api()
     tools_container = st.container()
     text_container = st.empty()
     rendered_text = ""
@@ -37,6 +38,53 @@ def render_event_stream(stream) -> str:
     for event in stream:
         try:
             etype = event.get("type")
+
+            # ── Permission gate ────────────────────────────────────────────
+            if etype == "permission_request":
+                request_id = event.get("request_id")
+                tool_name  = event.get("tool", "unknown")
+                category   = event.get("category", "")
+                arguments  = event.get("arguments", {})
+
+                with st.container(border=True):
+                    st.warning(f"⚠️ **Gabriel wants to use a tool**")
+                    st.markdown(f"**Tool:** `{tool_name}`")
+                    if category:
+                        st.markdown(f"**Category:** `{category}`")
+                    if arguments:
+                        st.markdown("**Arguments:**")
+                        st.json(arguments)
+
+                    col_allow, col_deny = st.columns(2)
+                    with col_allow:
+                        allow = st.button(
+                            "✅ Allow",
+                            key=f"allow_{request_id}",
+                            use_container_width=True,
+                        )
+                    with col_deny:
+                        deny = st.button(
+                            "❌ Deny",
+                            key=f"deny_{request_id}",
+                            use_container_width=True,
+                        )
+
+                    if allow:
+                        try:
+                            api.respond_permission(request_id, approved=True)
+                            st.success("Allowed.")
+                        except Exception as e:
+                            st.error(f"Failed to send approval: {e}")
+
+                    if deny:
+                        try:
+                            api.respond_permission(request_id, approved=False)
+                            st.info("Denied.")
+                        except Exception as e:
+                            st.error(f"Failed to send denial: {e}")
+                continue
+
+            # ── Normal events ──────────────────────────────────────────────
             if etype == "token":
                 rendered_text += event.get("content", "")
                 text_container.markdown(rendered_text)
@@ -62,7 +110,8 @@ def render_event_stream(stream) -> str:
                 if event.get("content"):
                     rendered_text = event["content"]
                     text_container.markdown(rendered_text)
-        except Exception as e:  # defensive: never let one event crash the page
+
+        except Exception as e:
             st.error(f"Error rendering event: {e}")
             continue
 

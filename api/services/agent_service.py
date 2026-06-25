@@ -1,66 +1,33 @@
-"""
-AgentService
-============
-
-The orchestration boundary. Wraps the existing ``AgentExecutor`` (agent logic is
-NOT rewritten) and exposes:
-
-* ``chat``        - run a turn and return the full reply (non-streaming)
-* ``stream``      - yield a sequence of **normalized** events
-
-The key extraction here is the *stream normalizer*: previously ``views/chat.py``
-parsed raw runtime chunks directly inside Streamlit widgets. That parsing now
-lives here, producing a stable event contract consumed identically by the REST
-layer, the WebSocket layer and the Streamlit thin client:
-
-    {"type": "status",      "status": "started", "agent": "<name>"}
-    {"type": "token",       "content": "<text delta>"}
-    {"type": "tool_start",  "name": "<tool>", "input": {...}}
-    {"type": "tool_output", "name": "<tool>", "content": "<text>"}
-    {"type": "tool_end",    "name": "<tool>", "output": "<text>"}
-    {"type": "error",       "message": "<text>"}
-    {"type": "done",        "content": "<full assistant text>"}
-"""
-
 from __future__ import annotations
 
+import queue
+import threading
 from typing import Any, Iterator, Optional
 
 from api.services.config_service import ConfigService
+from security.permission_tool import set_event_callback
 
 
 class AgentService:
     def __init__(self, config_service: Optional[ConfigService] = None) -> None:
         self._config = config_service or ConfigService()
-        self._executor = None  # lazy
+        self._executor = None
 
     @property
     def executor(self):
         if self._executor is None:
             from agents.executor import AgentExecutor
-
             self._executor = AgentExecutor()
         return self._executor
 
-    # -- non-streaming -------------------------------------------------------
-    def chat(
-        self, messages: list[dict[str, str]], agent_name: Optional[str], thread_id: str
-    ) -> dict[str, Any]:
+    def chat(self, messages, agent_name, thread_id) -> dict[str, Any]:
         agent = self._config.resolve_chat_agent(agent_name)
         if agent is None:
             raise ValueError("No enabled agents available for chat")
         result = self.executor.execute(agent=agent, messages=messages, thread_id=thread_id)
-        return {
-            "agent_name": result.agent_name,
-            "success": result.success,
-            "output": result.output,
-        }
+        return {"agent_name": result.agent_name, "success": result.success, "output": result.output}
 
-    # -- streaming -----------------------------------------------------------
-    def stream(
-        self, messages: list[dict[str, str]], agent_name: Optional[str], thread_id: str
-    ) -> Iterator[dict[str, Any]]:
-        """Yield normalized events for a chat turn."""
+    def stream(self, messages, agent_name, thread_id) -> Iterator[dict[str, Any]]:
         agent = self._config.resolve_chat_agent(agent_name)
         if agent is None:
             yield {"type": "error", "message": "No enabled agents available for chat"}
@@ -68,39 +35,59 @@ class AgentService:
 
         yield {"type": "status", "status": "started", "agent": agent.name}
 
+        # Thread-safe queue so the tool thread can inject permission_request
+        # events into this generator's output.
+        event_queue: queue.SimpleQueue = queue.SimpleQueue()
+        _DONE = object()
+
+        def _cb(event: dict) -> None:
+            event_queue.put(event)
+
+        set_event_callback(_cb)
+
         full_text_parts: list[str] = []
-        try:
-            raw_stream = self.executor.execute_stream(
-                agent=agent, messages=messages, thread_id=thread_id
-            )
-            for chunk in raw_stream:
-                for event in self._normalize_chunk(chunk):
-                    if event["type"] == "token":
-                        full_text_parts.append(event["content"])
-                    yield event
-        except Exception as exc:  # surface runtime/agent errors as events
-            yield {"type": "error", "message": str(exc)}
+        error_holder: list[str] = []
+
+        def _run_stream():
+            try:
+                raw_stream = self.executor.execute_stream(
+                    agent=agent, messages=messages, thread_id=thread_id
+                )
+                for chunk in raw_stream:
+                    for event in self._normalize_chunk(chunk):
+                        event_queue.put(event)
+            except Exception as exc:
+                error_holder.append(str(exc))
+            finally:
+                event_queue.put(_DONE)
+
+        t = threading.Thread(target=_run_stream, daemon=True)
+        t.start()
+
+        while True:
+            item = event_queue.get()
+            if item is _DONE:
+                break
+            if item.get("type") == "token":
+                full_text_parts.append(item.get("content", ""))
+            yield item
+
+        t.join()
+        set_event_callback(None)
+
+        if error_holder:
+            yield {"type": "error", "message": error_holder[0]}
             return
 
         yield {"type": "done", "content": "".join(full_text_parts)}
 
-    # -- normalization -------------------------------------------------------
-    def _normalize_chunk(self, chunk: Any) -> list[dict[str, Any]]:
-        """Convert a raw runtime chunk into zero or more normalized events.
+    # ── normalization (unchanged from original) ──────────────────────────────
 
-        Handles three shapes seen across runtimes:
-        1. Already-normalized dicts carrying an explicit ``type``.
-        2. LangChain ``astream_events``-style dicts (``event``/``data``/``name``).
-        3. Plain strings (e.g. simple ``ServerAgent`` token stream).
-        """
-        # Shape 3: raw string token
+    def _normalize_chunk(self, chunk: Any) -> list[dict[str, Any]]:
         if isinstance(chunk, str):
             return [{"type": "token", "content": chunk}] if chunk else []
-
         if not isinstance(chunk, dict):
             return []
-
-        # Shape 1: explicit type contract used by the langgraph chat agent
         ctype = chunk.get("type")
         if ctype == "messages":
             return self._tokens_from_messages(chunk.get("data"))
@@ -108,33 +95,16 @@ class AgentService:
             text = chunk.get("content", "")
             return [{"type": "token", "content": text}] if text else []
         if ctype == "tool_start":
-            return [{
-                "type": "tool_start",
-                "name": chunk.get("name", "unknown"),
-                "input": chunk.get("input", {}),
-            }]
+            return [{"type": "tool_start", "name": chunk.get("name", "unknown"), "input": chunk.get("input", {})}]
         if ctype == "tool_output":
-            return [{
-                "type": "tool_output",
-                "name": chunk.get("name", "unknown"),
-                "content": str(chunk.get("content", "")),
-            }]
+            return [{"type": "tool_output", "name": chunk.get("name", "unknown"), "content": str(chunk.get("content", ""))}]
         if ctype == "tool_end":
             raw_output = chunk.get("output")
-            output = ""
-            if raw_output is not None:
-                output = getattr(raw_output, "content", None) or str(raw_output)
-            return [{
-                "type": "tool_end",
-                "name": chunk.get("name", "unknown"),
-                "output": output,
-            }]
-
-        # Shape 2: LangChain astream_events fallback
+            output = "" if raw_output is None else (getattr(raw_output, "content", None) or str(raw_output))
+            return [{"type": "tool_end", "name": chunk.get("name", "unknown"), "output": output}]
         event = chunk.get("event")
         if event:
             return self._normalize_langchain_event(chunk, event)
-
         return []
 
     @staticmethod
@@ -162,9 +132,7 @@ class AgentService:
             token = data.get("chunk")
             text = getattr(token, "content", "") if token is not None else ""
             if isinstance(text, list):
-                text = "".join(
-                    t.get("text", "") if isinstance(t, dict) else str(t) for t in text
-                )
+                text = "".join(t.get("text", "") if isinstance(t, dict) else str(t) for t in text)
             return [{"type": "token", "content": text}] if text else []
         if event == "on_tool_start":
             return [{"type": "tool_start", "name": name, "input": data.get("input", {})}]

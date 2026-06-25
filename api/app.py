@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import agents, chat, memory, sessions, tools
+from api.routes.permissions import router as permissions_router
 from api.websocket import router as ws_router
 
 app = FastAPI(
@@ -29,4 +30,5 @@ app.include_router(chat.router)
 app.include_router(sessions.router)
 app.include_router(tools.router)
 app.include_router(memory.router)
+app.include_router(permissions_router)
 app.include_router(ws_router)

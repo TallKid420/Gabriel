@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from daemon.pid_lock import _PROJECT_ROOT
-from agents.types.daemon_agent import DaemonAgent
+# from agents.types.daemon_agent import DaemonAgent
 from agents.executor import AgentExecutor, AgentExecutionResult
 from config.config_manager import ConfigManager
 
@@ -54,18 +54,18 @@ class ServerDaemon:
             return None
         return ConfigManager(config_path=config_path)
 
-    def _select_daemon_agents(self, manager: ConfigManager) -> list[DaemonAgent]:
-        return [agent for agent in manager.get_enabled_agents() if isinstance(agent, DaemonAgent)]
+    # def _select_daemon_agents(self, manager: ConfigManager) -> list[DaemonAgent]:
+    #     return [agent for agent in manager.get_enabled_agents() if isinstance(agent, DaemonAgent)]
 
 
-    def _execute_daemon_agents(self, agents: list[DaemonAgent], tick_count: int) -> list[AgentExecutionResult]:
-        return [
-            self._agent_executor.execute(
-                agent=agent,
-                messages=[{"role": "user", "content": f"Daemon tick {tick_count}"}],
-            )
-            for agent in agents
-        ]
+    # def _execute_daemon_agents(self, agents: list[DaemonAgent], tick_count: int) -> list[AgentExecutionResult]:
+    #     return [
+    #         self._agent_executor.execute(
+    #             agent=agent,
+    #             messages=[{"role": "user", "content": f"Daemon tick {tick_count}"}],
+    #         )
+    #         for agent in agents
+    #     ]
 
     def _set_last_results(self, results: list[AgentExecutionResult]) -> None:
         with self._lock:

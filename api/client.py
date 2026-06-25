@@ -134,3 +134,12 @@ class GabrielAPIClient:
 
     def delete_memories(self, ids: list[str]) -> dict:
         return self._delete("/api/memory", {"ids": ids})
+
+    def respond_permission(self, request_id: str, approved: bool) -> dict:
+        resp = self._session.post(
+            f"{self.base_url}/api/permissions/{request_id}/respond",
+            json={"approved": approved},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp.json()
