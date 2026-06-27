@@ -9,6 +9,7 @@ import logging
 import streamlit as st
 
 from app import get_api
+from io import BytesIO
 
 log = logging.getLogger(__name__)
 
@@ -27,42 +28,96 @@ def memory_ui():
     tab1, tab2 = st.tabs(["Add Resources", "View Stored Memories"])
 
     with tab1:
-        st.subheader("Add links or documents")
-        st.markdown(
-            "Provide one or more URLs for the agent to crawl and/or upload files "
-            "that should be added to the knowledge database."
+        st.subheader("Add Resources")
+
+        resource_type = st.selectbox(
+            "Resource Type",
+            [
+                "Resource URLs",
+                "Upload documents",
+                "Notes / metadata",
+            ],
         )
+
+        st.divider()
+
         with st.form(key="memory_resource_form"):
-            urls = st.text_area(
-                label="Resource URLs",
-                placeholder="https://example.com/article\nhttps://docs.example.com/spec.pdf",
-                help="Enter one URL per line.",
-                height=120,
-            )
-            uploaded_files = st.file_uploader(
-                label="Upload documents",
-                type=["txt", "md", "pdf", "docx"],
-                accept_multiple_files=True,
-            )
-            notes = st.text_area(label="Notes / metadata", height=80)
-            submit_button = st.form_submit_button("Save resource list")
+
+            urls = None
+            uploaded_files = None
+            notes = None
+
+            if resource_type == "Resource URLs":
+                st.markdown(
+                    "Provide one or more URLs for the agent to crawl."
+                )
+
+                urls = st.text_area(
+                    label="Resource URLs",
+                    placeholder=(
+                        "https://example.com/article\n"
+                        "https://docs.example.com/spec.pdf"
+                    ),
+                    help="Enter one URL per line.",
+                    height=120,
+                )
+
+            elif resource_type == "Upload documents":
+                st.markdown(
+                    "Upload documents that should be added to the knowledge database."
+                )
+
+                uploaded_files = st.file_uploader(
+                    label="Upload documents",
+                    type=["txt", "md", "pdf", "docx"],
+                    accept_multiple_files=True,
+                )
+
+            elif resource_type == "Notes / metadata":
+                st.markdown(
+                    "Add additional information or metadata for the resource."
+                )
+
+                notes = st.text_area(
+                    label="Notes / metadata",
+                    height=120,
+                )
+
+            submit_button = st.form_submit_button("Save resource")
 
             if submit_button:
-                st.success(
-                    "Resources captured. Backend ingestion endpoint is not wired "
-                    "yet (tracked in the technical-debt list)."
-                )
-                if urls:
-                    st.markdown("**URLs to ingest:**")
-                    for url in [u.strip() for u in urls.splitlines() if u.strip()]:
-                        st.write(f"- {url}")
-                if uploaded_files:
-                    st.markdown("**Uploaded documents:**")
-                    for uploaded_file in uploaded_files:
-                        st.write(f"- {uploaded_file.name} ({uploaded_file.type or 'unknown type'})")
-                if notes:
-                    st.markdown("**Notes:**")
-                    st.write(notes)
+                try:
+                    responses = []
+
+                    if urls:
+                        for url in [u.strip() for u in urls.splitlines() if u.strip()]:
+                            responses.append(api.ingest_url(url=url))
+
+                    elif uploaded_files:
+                        for uploaded_file in uploaded_files:
+                            responses.append(api.ingest_file(file=uploaded_file))
+
+                    elif notes:
+                        # Convert to file object.
+                        data = BytesIO(notes.encode("utf-8"))
+                        data.filename = "notes.md"
+
+                        responses.append(api.ingest_file(file=data))
+
+                    else: 
+                        st.warning(
+                            "No resource provided. Please enter a URL, upload a document, "
+                            "or add notes before saving."
+                        )
+                        return
+                    
+                    for resp in responses:
+                        st.success(resp.get("detail", "Resource ingested successfully"))
+                        
+                except Exception as e:
+                    st.error(f"Failed to ingest resource: {e}")
+                    log.exception("Memory ingestion failed")
+
 
     with tab2:
         st.subheader("Stored Memories")

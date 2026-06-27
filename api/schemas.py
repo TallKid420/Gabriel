@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from fastapi import UploadFile
+
 from pydantic import BaseModel, Field
 
 
@@ -146,6 +148,11 @@ class MemoryListResponse(BaseModel):
 class MemoryDeleteRequest(BaseModel):
     ids: list[str]
 
+class IngestURL(BaseModel):
+    url: Optional[str] = None
+
+class IngestFile(BaseModel):
+    file: Optional[UploadFile] = None # UI Uploads
 
 # ---------------------------------------------------------------------------
 # Generic

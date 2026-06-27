@@ -1,8 +1,11 @@
 aiohttp
+bs4>=0.0.2
 crawl4ai
 ddgs
 docker
+docling
 fastapi>=0.115.0
+fitz
 httpx
 langchain
 langchain-core>=0.2.0
@@ -10,10 +13,13 @@ langchain-ollama>=0.1.0
 langgraph>=0.1.20
 langgraph-checkpoint-postgres
 nest_asyncio
+openpyxl
 pgvector
+pillow>=12.2.0
 psycopg[binary]
 psycopg_pool
 pydantic>=2.8.0
+pytesseract>=0.3.13
 python-dotenv
 PyYAML>=6.0.0
 rich>=14.0.0

@@ -105,7 +105,7 @@ def _build_dest_path(destination_dir: Path, url: str, ext: str) -> Path:
 async def download_file(
     url: str,
     destination_dir: Path | str,
-    allowed_extensions: List[str] | None = None,
+    # allowed_extensions: List[str] | None = None,
     session: aiohttp.ClientSession | None = None,
     request_timeout_seconds: int = 60,
     skipped_counter: list | None = None,
@@ -137,7 +137,7 @@ async def download_file(
         Absolute path string of the saved file, or None if skipped/failed.
     """
     destination_dir = Path(destination_dir)
-    allowed_extensions = [e.lower() for e in (allowed_extensions or DEFAULT_ALLOWED_EXTENSIONS)]
+    allowed_extensions = DEFAULT_ALLOWED_EXTENSIONS # [e.lower() for e in (allowed_extensions or DEFAULT_ALLOWED_EXTENSIONS)]
 
     async def _do_download(sess: aiohttp.ClientSession) -> str | None:
         timeout = aiohttp.ClientTimeout(total=request_timeout_seconds)
@@ -209,7 +209,7 @@ async def download_file(
 
 def is_downloadable_url(
     url: str,
-    allowed_extensions: List[str] | None = None,
+    # allowed_extensions: List[str] | None = None,
 ) -> bool:
     """
     Quick pre-flight check: does the URL path end with an allowed extension?
@@ -219,6 +219,6 @@ def is_downloadable_url(
     Note: this only checks the URL path — Content-Type is not available
     until the request is made. Use this as a fast early filter only.
     """
-    allowed_extensions = [e.lower() for e in (allowed_extensions or DEFAULT_ALLOWED_EXTENSIONS)]
+    allowed_extensions = DEFAULT_ALLOWED_EXTENSIONS # [e.lower() for e in (allowed_extensions or DEFAULT_ALLOWED_EXTENSIONS)]
     ext = _ext_from_url(url)
     return ext is not None and ext in allowed_extensions

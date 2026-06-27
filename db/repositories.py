@@ -358,6 +358,57 @@ class LinkRepository:
                     added += 1
         return added
 
+    def add_url(
+        self,
+        url: str,
+        source_type: str,
+        source_value: Optional[str] = None,
+        content_kind: str = "page",
+        parent_url: Optional[str] = None,
+    ) -> bool:
+        """
+        Normalize and insert a single URL as pending.
+
+        Returns:
+            bool: True if the URL was inserted, False if it already existed or was invalid.
+        """
+        from daemon.url_parser.normalizer import normalize_url
+
+        normalized = normalize_url(url)
+        if not normalized:
+            return False
+
+        now = _now_iso()
+
+        pool = get_pool()
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO links (
+                    url,
+                    parent_url,
+                    content_kind,
+                    source_type,
+                    source_value,
+                    crawl_status,
+                    ingest_status,
+                    discovered_at
+                )
+                VALUES (%s, %s, %s, %s, %s, 'pending', 'not_started', %s)
+                ON CONFLICT (url) DO NOTHING
+                """,
+                (
+                    normalized,
+                    parent_url,
+                    content_kind,
+                    source_type,
+                    source_value,
+                    now,
+                ),
+            )
+
+            return cur.rowcount > 0
+
     # ── Crawl claim / result ──────────────────────────────────────────────--
     def claim_pending_crawl(self, limit: int = 10) -> List[Dict[str, Any]]:
         now = _now_iso()

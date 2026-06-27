@@ -135,6 +135,18 @@ class GabrielAPIClient:
     def delete_memories(self, ids: list[str]) -> dict:
         return self._delete("/api/memory", {"ids": ids})
 
+    def ingest_url(self, url: str) -> dict:
+        return self._post("/api/memory/url", {"url": url})
+    
+    def ingest_file(self, file: str) -> dict:
+        return self._post(
+            "/api/memory/file", 
+            {
+                "file": {file.filename, file.getvalue()}
+            }
+        )
+    
+    # -- security ------------------------------------------------------------
     def respond_permission(self, request_id: str, approved: bool) -> dict:
         resp = self._session.post(
             f"{self.base_url}/api/permissions/{request_id}/respond",

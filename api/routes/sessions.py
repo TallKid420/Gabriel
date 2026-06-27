@@ -1,127 +1,88 @@
-"""Sessions page — presentation only.
+"""Chat session REST endpoints."""
 
-Session CRUD is delegated to the backend via the API client. ``active_session_id``
-remains in Streamlit session state because it is genuine UI selection state.
-"""
+from __future__ import annotations
 
-import streamlit as st
-from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException
 
-from app import get_api
+from api.dependencies import get_session_service
+from api.schemas import (
+    MessageCreate,
+    OkResponse,
+    SessionCreate,
+    SessionDetail,
+    SessionListResponse,
+    SessionSummary,
+)
+from api.services.session_service import ChatSession, SessionService
 
-
-class SessionManager:
-    """Thin façade over the backend session API (kept for call-site compat)."""
-
-    @staticmethod
-    def create_session(agent_name: Optional[str] = None) -> None:
-        api = get_api()
-        created = api.create_session(agent_name=agent_name)
-        st.session_state.active_session_id = created["id"]
-
-    @staticmethod
-    def delete_session(session_id: str) -> None:
-        api = get_api()
-        api.delete_session(session_id)
-        remaining = api.list_sessions()
-        if not remaining:
-            SessionManager.create_session()
-            return
-        if st.session_state.get("active_session_id") == session_id:
-            st.session_state.active_session_id = remaining[0]["id"]
+router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
-def _render_session_card(session: dict) -> None:
-    label = session.get("title") or "New chat"
-    is_active = session["id"] == st.session_state.get("active_session_id")
-    status = "🟢" if is_active else "⚪"
-
-    with st.container(border=True):
-        col1, col2 = st.columns([1, 8])
-        with col1:
-            st.markdown(
-                f"<div style='text-align: center; font-size: 1.2em;'>{status}</div>",
-                unsafe_allow_html=True,
-            )
-        with col2:
-            if st.button(
-                label,
-                key=f"session_select_{session['id']}",
-                use_container_width=True,
-                on_click=lambda sid=session["id"]: st.session_state.__setitem__(
-                    "active_session_id", sid
-                ),
-            ):
-                pass
-            st.caption(
-                f"**Messages:** {session.get('message_count', 0)} • "
-                f"**Created:** {session.get('created_at', '')}"
-            )
-
-        col_del = st.columns([11, 1])
-        with col_del[1]:
-            if st.button(
-                "✕",
-                key=f"session_delete_{session['id']}",
-                on_click=lambda sid=session["id"]: SessionManager.delete_session(sid),
-                help="Delete session",
-            ):
-                pass
+def _to_summary(s: ChatSession) -> SessionSummary:
+    return SessionSummary(
+        id=s.id,
+        title=s.title,
+        created_at=s.created_at,
+        agent_name=s.agent_name,
+        message_count=len(s.messages),
+    )
 
 
-def session_ui() -> None:
-    api = get_api()
-    st.title("Sessions")
-    st.write("Browse, open, and manage your saved chats.")
+def _to_detail(s: ChatSession) -> SessionDetail:
+    return SessionDetail(
+        id=s.id,
+        title=s.title,
+        created_at=s.created_at,
+        agent_name=s.agent_name,
+        messages=s.messages,
+    )
 
+
+@router.get("", response_model=SessionListResponse)
+def list_sessions(svc: SessionService = Depends(get_session_service)):
+    return SessionListResponse(sessions=[_to_summary(s) for s in svc.list_sessions()])
+
+
+@router.post("", response_model=SessionDetail, status_code=201)
+def create_session(
+    payload: SessionCreate, svc: SessionService = Depends(get_session_service)
+):
+    session = svc.create_session(agent_name=payload.agent_name, title=payload.title)
+    return _to_detail(session)
+
+
+@router.get("/{session_id}", response_model=SessionDetail)
+def get_session(session_id: str, svc: SessionService = Depends(get_session_service)):
+    session = svc.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return _to_detail(session)
+
+
+@router.delete("/{session_id}", response_model=OkResponse)
+def delete_session(session_id: str, svc: SessionService = Depends(get_session_service)):
+    if not svc.delete_session(session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return OkResponse(detail="deleted")
+
+
+@router.post("/{session_id}/messages", response_model=SessionDetail)
+def append_message(
+    session_id: str,
+    payload: MessageCreate,
+    svc: SessionService = Depends(get_session_service),
+):
     try:
-        sessions = api.list_sessions()
-    except Exception as e:
-        st.error(f"Could not load sessions from backend: {e}")
-        return
+        session = svc.append_message(session_id, payload.role, payload.content)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return _to_detail(session)
 
-    st.metric("Total sessions", len(sessions))
 
-    if not sessions:
-        st.info("No saved sessions found. Create a new chat to get started.")
-    else:
-        sessions_by_agent: dict[str, list[dict]] = {}
-        for session in sessions:
-            agent = session.get("agent_name") or "No Agent"
-            sessions_by_agent.setdefault(agent, []).append(session)
-
-        for agent in sorted(sessions_by_agent.keys()):
-            with st.expander(f"🤖 {agent}", expanded=True):
-                cols = st.columns(2)
-                for idx, session in enumerate(sessions_by_agent[agent]):
-                    with cols[idx % 2]:
-                        _render_session_card(session)
-
-    st.divider()
-    st.subheader("Start New Chat")
+@router.post("/{session_id}/clear", response_model=SessionDetail)
+def clear_session(session_id: str, svc: SessionService = Depends(get_session_service)):
     try:
-        enabled_agents = api.list_agents(enabled_only=True)
-    except Exception:
-        enabled_agents = []
-
-    if enabled_agents:
-        names = [f"{a['name']} ({a['type']})" for a in enabled_agents]
-        selected_name = st.selectbox(
-            "Choose agent", options=names, index=0, label_visibility="collapsed"
-        )
-        selected_agent = enabled_agents[names.index(selected_name)]
-        st.button(
-            "Chat with selected agent",
-            use_container_width=True,
-            on_click=lambda name=selected_agent["name"]: (
-                st.session_state.__setitem__("last_manual_agent_name", name),
-                SessionManager.create_session(name),
-            ),
-            key=f"chat_with_{selected_agent['name']}",
-        )
-    else:
-        st.info("No enabled agents in config/agents.yaml")
-
-
-if __name__ == "__main__":
-    session_ui()
+        session = svc.clear_messages(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return _to_detail(session)

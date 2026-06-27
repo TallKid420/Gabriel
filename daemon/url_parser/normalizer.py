@@ -1,5 +1,8 @@
 from urllib.parse import urlparse, urlunparse, unquote, urlencode, parse_qsl
 from tldextract import extract as tld_extract
+from daemon.logger import RichLogManager
+
+log = RichLogManager.get_logger()
 
 
 def normalize_url(url: str) -> str:
@@ -22,19 +25,19 @@ def normalize_url(url: str) -> str:
     try:
         parsed = urlparse(url.strip())
     except Exception:
-        print(f"[normalize_url] Failed to parse URL: '{url}'")
+        log.error(f"[normalize_url] Failed to parse URL: '{url}'")
         return ""
 
     # Only handle http and https
     scheme = parsed.scheme.lower()
     if scheme not in ("http", "https"):
-        print(f"[normalize_url] Unsupported scheme '{scheme}', dropping: '{url}'")
+        log.error(f"[normalize_url] Unsupported scheme '{scheme}', dropping: '{url}'")
         return ""
 
     # Lowercase host, strip leading/trailing whitespace
     netloc = parsed.netloc.lower().strip()
     if not netloc:
-        print(f"[normalize_url] Missing host, dropping: '{url}'")
+        log.error(f"[normalize_url] Missing host, dropping: '{url}'")
         return ""
 
     # Remove default ports using splitport-safe logic
@@ -65,7 +68,7 @@ def normalize_url(url: str) -> str:
     normalized = urlunparse((scheme, netloc, path, parsed.params, query, ""))
 
     if normalized != url:
-        print(f"[normalize_url] '{url}' -> '{normalized}'")
+        log.debug(f"[normalize_url] '{url}' -> '{normalized}'")
 
     return normalized
 
@@ -86,7 +89,7 @@ def strip_query_params(url: str) -> str:
         ""
     ))
     if stripped != url:
-        print(f"[strip_query_params] '{url}' -> '{stripped}'")
+        log.debug(f"[strip_query_params] '{url}' -> '{stripped}'")
     return stripped
 
 

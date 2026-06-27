@@ -13,6 +13,7 @@ import hashlib
 import asyncio
 import aiohttp
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple, TYPE_CHECKING
@@ -29,7 +30,6 @@ if TYPE_CHECKING:
 # ── Retryable HTTP status codes ───────────────────────────────────────────────
 # 429 and 5xx are retryable. 4xx (except 429) are permanent failures.
 _RETRYABLE_HTTP_STATUSES = {429, 500, 502, 503, 504}
-
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -100,6 +100,36 @@ def _distribute_urls(
     return batches
 
 
+async def crawl_tool(self, urls: List[str], max_concurrent: int = 3) -> list:
+    # print(f"\n=== Local Research: Crawling {len(urls)} URLs ===")
+    browser_config = BrowserConfig(headless=True, extra_args=["--no-sandbox"])
+    crawl_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
+    crawler = AsyncWebCrawler(config=browser_config)
+
+    output = []
+
+    await crawler.start()
+
+    try:
+        for i in range(0, len(urls), max_concurrent):
+            batch = urls[i : i + max_concurrent]
+            print(f"Processing batch {i//max_concurrent + 1}...")
+            
+            tasks = [crawler.arun(url=url, config=crawl_config) for url in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for url, result in zip(batch, results):
+                if not isinstance(result, Exception) and result.success:
+                    await self.process_and_store_document(url, result.markdown)
+                    output.append({url: 'Success'})
+                else:
+                    print(f"Failed to crawl: {url}")
+                    output.append({url: 'Failed'})
+    finally:
+        await crawler.close()
+        return output
+
+
 async def _crawl_batch(
     instance_index: int,
     urls: List[str],
@@ -160,7 +190,6 @@ async def crawl_heartbeat(queue: "LinkQueue", config: object) -> None:
         config.crawl_batch_size         int          — URLs to claim per tick
         config.browser_instances        int          — parallel browser count
         config.max_concurrent_per_instance int       — concurrent tabs per browser
-        config.allowed_extensions       List[str]    — for downloader routing
         config.raw_dir                  Path         — where to write markdown JSON
         config.files_dir                Path         — where downloader saves files
         config.request_timeout_seconds  int          — HTTP timeout for downloader
@@ -188,9 +217,9 @@ async def crawl_heartbeat(queue: "LinkQueue", config: object) -> None:
     print(f"[crawler] Claimed {len(rows)} URLs for crawl tick")
 
     # ── 3. Route: split into files vs pages ───────────────────────────────────
-    allowed_extensions = getattr(config, "allowed_extensions", None)
-    file_rows  = [r for r in rows if is_downloadable_url(r["url"], allowed_extensions)]
-    page_rows  = [r for r in rows if not is_downloadable_url(r["url"], allowed_extensions)]
+    # allowed_extensions = getattr(config, "allowed_extensions", None)
+    file_rows  = [r for r in rows if is_downloadable_url(r["url"])]
+    page_rows  = [r for r in rows if not is_downloadable_url(r["url"])]
 
     print(f"[crawler] Routing: {len(page_rows)} pages, {len(file_rows)} files")
 
@@ -215,7 +244,7 @@ async def crawl_heartbeat(queue: "LinkQueue", config: object) -> None:
                 download_file(
                     url=r["url"],
                     destination_dir=files_dir,
-                    allowed_extensions=allowed_extensions,
+                    # allowed_extensions=allowed_extensions,
                     session=session,
                     request_timeout_seconds=timeout_sec,
                     skipped_counter=skipped_counter,

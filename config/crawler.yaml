@@ -17,17 +17,5 @@ crawler:
   ingest_interval_sec: 15
   ingest_batch_size: 10
 
-  allowed_extensions:
-    - .pdf
-    - .txt
-    - .md
-    - .html
-    - .htm
-    - .csv
-    - .json
-    - .xml
-    - .docx
-    - .xlsx
-
   backpressure_threshold: 100
   keep_alive_on_ui_exit: false

@@ -10,7 +10,7 @@ import streamlit as st
 from app import get_api
 
 DEFAULT_ENDPOINT = "http://localhost:11434"
-CREATABLE_AGENT_TYPES = ["chat", "engineer", "researcher", "server"]
+CREATABLE_AGENT_TYPES = ["chat"] # "engineer", "researcher", "server"]
 DEFAULT_PROVIDERS = ["ollama", "openai", "anthropic", "local"]
 
 

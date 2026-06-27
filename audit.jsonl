@@ -4,3 +4,9 @@
 {"timestamp": "2026-06-24T23:46:47.877068+00:00", "tool": "list_directory", "result": "success"}
 {"timestamp": "2026-06-24T23:48:55.702630+00:00", "tool": "list_directory", "category": "unknown", "decision": "allowed", "arguments": {"path": "."}}
 {"timestamp": "2026-06-24T23:48:55.709316+00:00", "tool": "list_directory", "result": "success"}
+{"timestamp": "2026-06-26T02:39:24.572868+00:00", "tool": "vector_search", "category": "unknown", "decision": "allowed", "arguments": {"query": "spacex", "limit": 10}}
+{"timestamp": "2026-06-26T02:39:29.327341+00:00", "tool": "vector_search", "result": "success"}
+{"timestamp": "2026-06-26T02:39:30.848362+00:00", "tool": "vector_search", "category": "unknown", "decision": "allowed", "arguments": {"query": "SpaceX", "limit": 5}}
+{"timestamp": "2026-06-26T02:39:30.877841+00:00", "tool": "vector_search", "result": "success"}
+{"timestamp": "2026-06-26T02:52:10.644180+00:00", "tool": "vector_search", "category": "unknown", "decision": "allowed", "arguments": {"query": "SpaceX", "limit": 5}}
+{"timestamp": "2026-06-26T02:52:13.348564+00:00", "tool": "vector_search", "result": "success"}

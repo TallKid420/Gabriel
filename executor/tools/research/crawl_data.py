@@ -17,4 +17,5 @@ def crawl_data(query: str, max_results: int = 10):
     nest_asyncio.apply()
     
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(database.crawl_parallel(urls, max_concurrent=3))
+    output = loop.run_until_complete(database.crawl_parallel(urls, max_concurrent=3))
+    return output

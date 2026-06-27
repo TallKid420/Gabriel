@@ -74,7 +74,7 @@ class VectorDatabase:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:11434",
+        base_url: str = "http://jcs-macbook-pro:11434",
         embedding_model: str = "bge-m3",
         chroma_db_path: Optional[str] = None, # accepted + ignored (legacy) TODO: Remove Legacy Depracated
         embeddings: Any = None,
@@ -109,7 +109,7 @@ class VectorDatabase:
         from langchain_core.documents import Document
 
         try:
-            embedding = self._embedding_model.embed_query(query)
+            embedding = self.embeddings_model.embed_query(query)
             results = self._repo.search(embedding, k)
             return [
                 Document(page_content=r["content"], metadata=r.get("metadata") or {})
@@ -200,7 +200,7 @@ class VectorDatabase:
         
         source_url = chunks[0].metadata.get('url') if chunks else 'N/A'
         contents = [c.content for c in chunks]
-        print(f"[save] insert_chunks_local: embdding {len(contents)} documents for {source_url}")
+        print(f"[save] insert_chunks_local: embedding {len(contents)} documents for {source_url}")
         # Produce embeddings via Ollama (was handled internally by Chroma)
         embeddings = await asyncio.to_thread(self.embeddings_model.embed_documents, contents)
 
@@ -234,7 +234,7 @@ class Database:
     def __init__(self, db_path: Any = None, **_legacy_kwargs: Any):
         self._repo = AgentRepository()
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str):
         # Delegate agent/tool methods (register_agent, sync_agents, get_agents,
         # sync_agent_tools, get_agent_tool_states, get_enabled_tool_ids,
         # set_agent_tool_enabled, ...) to the repository.
@@ -243,7 +243,7 @@ class Database:
         return getattr(self._repo, name)
     
     def get_checkpointer(self):
-        """Return the shared LangGraph ``PostgressSaver`` (creates tables once)."""
+        """Return the shared LangGraph ``PostgresSaver`` (creates tables once)."""
         from db.checkpointer import get_checkpointer
 
         return get_checkpointer()
@@ -265,3 +265,4 @@ class LinkQueue:
         if name == "_repo":
             raise AttributeError(name)
         return getattr(self._repo, name)
+    

@@ -13,6 +13,9 @@ import asyncio
 
 from daemon.logger import RichLogManager
 
+from docling.document_converter import DocumentConverter
+from daemon.document import DocumentNormalizer
+
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -20,6 +23,7 @@ if TYPE_CHECKING:
     from daemon.database import LinkQueue, VectorDatabase
 
 logger = RichLogManager().get_logger(__name__)
+normalizer = DocumentNormalizer
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -65,27 +69,23 @@ async def _ingest_page(url: str, markdown: str, vector_db: "VectorDatabase") -> 
     """
     await vector_db.process_and_store_document(url, markdown)
 
-
 async def _ingest_file(url: str, raw_path: str, vector_db: "VectorDatabase") -> None:
-    """
-    Stub: process a downloaded file (PDF, DOCX, etc.) for ingestion.
+    """Process a single document and return metadata"""
 
-    TODO: implement per content type:
-        .pdf  -> extract text with pdfminer or pymupdf
-        .docx -> extract with python-docx
-        .txt / .md -> read directly
-        .csv  -> convert rows to text chunks
-        .html -> strip tags, treat as markdown
-        .json -> flatten to text
-        .xlsx -> convert sheets to text chunks
+    path = Path(raw_path)
+    markdown: str
 
-    For now: raises NotImplementedError so the queue marks it as a
-    non-retryable failure rather than silently dropping it.
-    """
-    raise NotImplementedError(
-        f"File ingestion not yet implemented for {raw_path}. "
-        f"URL: {url}"
-    )
+    # Try docling autodetect first
+    try:
+        markdown = normalizer.docling_normalizer(path=path)
+
+    except Exception as e:
+        logger.error(f"Docling Error; Moving to backup: {e}")
+        
+        markdown = normalizer.normalize_document(path=path)
+
+    # Save output
+    await vector_db.process_and_store_document(url, markdown)
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
